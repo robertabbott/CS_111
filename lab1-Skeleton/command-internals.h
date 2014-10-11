@@ -60,6 +60,6 @@ struct command
 
 struct command_stream
 {
-  struct command *cmd;
+  struct command *command;
   struct command_stream *next;
 };
