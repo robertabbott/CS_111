@@ -219,7 +219,7 @@ make_command_stream_util (char *get_char, File *fp) {
 
   else {
     // SIMPLE_COMMAND
-
+    
   }
 
   return comm;
