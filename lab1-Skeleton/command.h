@@ -24,6 +24,14 @@ typedef struct command_stream *command_stream_t;
    (setting errno) on failure.  */
 command_stream_t make_command_stream (int (*getbyte) (void *), void *arg);
 
+command_t parse_pipeline_command ();
+
+command_t parse_subshell_command ();
+
+command_t make_simple_command ();
+
+command_t make_command_stream_util ();
+
 /* Prepare for profiling to the file FILENAME.  If FILENAME is null or
    cannot be written to, set errno and return -1.  Otherwise, return a
    nonnegative integer flag useful as an argument to
