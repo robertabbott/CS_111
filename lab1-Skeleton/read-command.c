@@ -163,33 +163,33 @@ AllocateCommand()
   return command;
 }
 
-/*
 command_t
-parse_pipeline_command (char *get_char, File *fp, char *s) {
-  // parse into A | B format
-  int arg1_index;
-  commant_t pipe_comm;
-
-  command_t pipe_comm;
-  pipe_comm->type = PIPE_COMMAND;
-
-  arg1_index = strstr(s, "|");
-  strncpy (pipe_comm->command[0], s, arg1_index-1);
-  s = ReadNextToken ();
-
-  if (strstr (s, "|") != NULL) {
-    pipe_comm->command[1] = parse_pipeline_command (get_char, fp, s);
-  }
-  else if (strstr (s, "(") != NULL) {
-    pipe_comm->command[1] = parse_subshell_command (get_char, fp, s);
-  }
-  else {
-    pipe_comm->command[1] = s;
+makeSimpleCommand(command_t command, char **s)
+{
+  if (!command) {
+    command = AllocateCommand();
   }
 
-  return pipe_comm;
+  command->type = SIMPLE_COMMAND;
+  command->u.word = s;
+
+  return command;
 }
 
+command_t
+makePipeCommand (command_t command, char **tokenPTR)
+{
+  if (!command) {
+    command = AllocateCommand();
+  }
+
+  command->type = PIPE_COMMAND;
+  command->u.command[0] = makeSimpleCommand(NULL, tokenPTR);
+
+  return command;
+}
+
+/*
 command_t
 parse_subshell_command (char *get_char, File *fp, char *s) {
   command_t subshell_command;
@@ -205,18 +205,6 @@ parse_subshell_command (char *get_char, File *fp, char *s) {
 }
 
 */
-command_t
-makeSimpleCommand(command_t command, char **s)
-{
-  if (!command) {
-    command = AllocateCommand();
-  }
-
-  command->type = SIMPLE_COMMAND;
-  command->u.word = s;
-
-  return command;
-}
 
 command_t
 makeCommandStreamUtil(int (*get_next_byte) (void *),
@@ -324,6 +312,12 @@ makeCommandStreamUtil(int (*get_next_byte) (void *),
       } else if (type == NEWLINE) {
 	command = makeSimpleCommand(command, tokenPTR);
 	break;
+      } else if (type == PIPE) {
+	command = makePipeCommand(command, tokenPTR);
+	command->u.command[1] = makeCommandStreamUtil(get_next_byte,
+						      get_next_byte_argument);
+	break;
+
       }
     }
   }
