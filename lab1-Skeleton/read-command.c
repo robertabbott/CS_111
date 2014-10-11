@@ -68,7 +68,6 @@ ReadNextToken(char **t, int (*get_next_byte) (void *),
   }
   return ;
 }
-<<<<<<< HEAD
 
 */
 
@@ -232,11 +231,6 @@ make_command_stream_util (char *get_char, File *fp) {
 
   return comm;
 }
-
-// =======
-
-// >>>>>>> 1a098231cab8f8c3daac96dbf98b99c947271a43
-
 
 
 command_stream_t
