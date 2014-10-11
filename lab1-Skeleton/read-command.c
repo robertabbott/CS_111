@@ -26,21 +26,86 @@
 /* FIXME: Define the type 'struct command_stream' here.  This should
    complete the incomplete type declaration in command.h.  */
 
+command_stream_t *
+AllocateCommandStream()
+{
+  command_stream_t *node = NULL;
+
+  node = checked_malloc(sizeof cmd_stream_node);
+  node->command = node->node = NULL;
+
+  return node;
+}
+
+int
+ReadNextToken(char **t, int (*get_next_byte) (void *),
+	      void *get_next_byte_argument)
+{
+  char c;
+  char *token = ;
+
+  if (!t) {
+    return -1; // Replace with error code
+  }
+
+  while ((c = get_next_byte(get_next_byte_argument)) != EOF) {
+    switch (c) {
+    case ' ':
+      break;
+    case ';':
+      break;
+    case '|':
+      break;
+    default:
+      break;
+    }
+  }
+  return ;
+}
+
 command_stream_t
 make_command_stream (int (*get_next_byte) (void *),
 		     void *get_next_byte_argument)
 {
-  /* FIXME: Replace this with your implementation.  You may need to
-     add auxiliary functions and otherwise modify the source code.
-     You can also use external functions defined in the GNU C Library.  */
-  error (1, 0, "command reading not yet implemented");
-  return 0;
+  command_stream_t *head = NULL;
+  command_stream_t *prev = NULL;
+  command_stream_t *cur  = NULL;
+
+  while (1) {
+    command_stream_t *cmd_stream_node = NULL;
+    command_t command = make_command_stream_util(get_next_byte,
+						 get_next_byte_argument);
+    if (command) {
+      cur = AllocateCommandStream();
+      cur->command = command;
+      if (head) {
+	prev->next = cur;
+	prev = cur;
+      } else { // This is the first node
+	head = prev = cur;
+      }
+    } else {
+      break;
+    }
+  }
+
+  return cmd_stream_node;
 }
 
 command_t
-read_command_stream (command_stream_t s)
+read_command_stream (command_stream_t **s)
 {
-  /* FIXME: Replace this with your implementation too.  */
-  error (1, 0, "command reading not yet implemented");
-  return 0;
+  command_t *command;
+
+  if (!s || !*s) {
+    return NULL;
+  }
+
+  command = (*s)->command;
+
+  *s = (*s)->next;
+
+  // Free *s
+
+  return command;
 }

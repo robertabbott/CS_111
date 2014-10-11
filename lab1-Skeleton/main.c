@@ -76,7 +76,7 @@ main (int argc, char **argv)
 
   command_t last_command = NULL;
   command_t command;
-  while ((command = read_command_stream (command_stream)))
+  while ((command = read_command_stream (&command_stream)))
     {
       if (print_tree)
 	{
@@ -88,6 +88,7 @@ main (int argc, char **argv)
 	  last_command = command;
 	  execute_command (command, profiling);
 	}
+      // free command
     }
 
   return print_tree || !last_command ? 0 : command_status (last_command);
