@@ -18,6 +18,7 @@
 #include "command.h"
 #include "command-internals.h"
 
+#include <string.h>
 #include <error.h>
 
 /* FIXME: You may need to add #include directives, macro definitions,
@@ -61,6 +62,54 @@ ReadNextToken(char **t, int (*get_next_byte) (void *),
     }
   }
   return ;
+}
+
+command_t
+parse_pipeline_command (char *get_char, File *fp, char *s) {
+  // parse into A | B format
+  int arg1_index;
+
+  command_t pipe_comm;
+  pipe_comm->type = PIPE_COMMAND;
+
+  arg1_index = strstr(s, "|");
+  pipe_comm[0] = s[0:arg1_index]
+  pipe_comm[1] = ReadNextToken ();
+
+
+  return pipe_comm;
+}
+
+command_t
+make_command_stream_util (char *get_char, File *fp) {
+  char *s = ReadNextToken ();
+  command_t comm;
+
+  if (strstr (s, "|") != NULL) {
+    // PIPE_COMMAND should call util again
+    comm->command[0] = make_command_stream_util (get_char, fp, s);
+  }
+
+  else if (strstr (s, "(") != NULL) {
+    // create subshell
+
+  }
+
+  else if (strcmp(s, "IF", 2)) {
+    // continue until then statement
+
+
+  }
+  else if (strcmp(s, "WHILE", 5)) {
+    // continue until done statement
+
+  }
+  else if (strcmp(s, "UNTIL", 5)) {
+    // continue until done statement
+
+  }
+
+  return comm;
 }
 
 command_stream_t
