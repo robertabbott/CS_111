@@ -68,6 +68,7 @@ command_t
 parse_pipeline_command (char *get_char, File *fp, char *s) {
   // parse into A | B format
   int arg1_index;
+  commant_t pipe_comm;
 
   command_t pipe_comm;
   pipe_comm->type = PIPE_COMMAND;
@@ -81,8 +82,14 @@ parse_pipeline_command (char *get_char, File *fp, char *s) {
 }
 
 command_t
+parse_subshell_command (char *get_char, File *fp, char *s) {
+
+}
+
+command_t
 make_command_stream_util (char *get_char, File *fp) {
   char *s = ReadNextToken ();
+  char *nextToken;
   command_t comm;
 
   if (strstr (s, "|") != NULL) {
@@ -96,8 +103,21 @@ make_command_stream_util (char *get_char, File *fp) {
   }
 
   else if (strcmp(s, "IF", 2)) {
-    // continue until then statement
-    
+    // continue until fi statement
+    nextToken = ReadNextToken ();
+    while (!strcmp(nextToken, "FI", 2)) {
+      // if pipe command call parse_pipe
+      if (strstr (nextToken, "|") != NULL) {
+        comm->command[0] = parse_pipeline_command (get_char, fp, nextToken);
+      }
+      else if (strstr (nextToken, "(") != NULL) {
+        // create sub-shell command
+      }
+      // otherwise add token to if command
+      else {
+        comm->command[0] = nextToken;
+      }
+    }
 
   }
   else if (strcmp(s, "WHILE", 5)) {
