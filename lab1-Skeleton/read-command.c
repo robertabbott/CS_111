@@ -63,6 +63,14 @@ TOKENTYPE getTokenType(char c)
   return type;
 }
 
+void appendChar(char *s, char c)
+{
+  int len = strlen(s);
+
+  s[len++] = c;
+  s[len] = '\0';
+}
+
 void ignoreWhiteSpace(int (*get_next_byte) (void *),
 		      void *get_next_byte_argument)
 {
@@ -196,57 +204,45 @@ parse_subshell_command (char *get_char, File *fp, char *s) {
   }
 }
 
-command_t
-make_simple_command (char *s) {
-  command_t c;
-  c->type = SIMPLE_COMMAND;
-  c->word = s;
-
-  return c;
-}
 */
+command_t
+makeSimpleCommand(command_t command, char **s)
+{
+  if (!command) {
+    command = AllocateCommand();
+  }
+
+  command->type = SIMPLE_COMMAND;
+  command->u.word = s;
+
+  return command;
+}
 
 command_t
-make_command_stream_util(int (*get_next_byte) (void *),
-			 void *get_next_byte_argument)
+makeCommandStreamUtil(int (*get_next_byte) (void *),
+		      void *get_next_byte_argument)
 {
-  char *s;
+  char **tokenPTR = checked_malloc(sizeof(char**));
+  char *token = NULL;
   char *nextToken;
   int len = 0;
   TOKENTYPE type;
   command_t command;
 
-  type = readNextToken(&s, &len, get_next_byte, get_next_byte_argument);
-  if (!s) {
+  type = readNextToken(tokenPTR, &len, get_next_byte, get_next_byte_argument);
+  if (type == NOT_DEFINED) {
+    free(tokenPTR);
     return NULL;
   }
+
   command = AllocateCommand();
   if (!command) {
     return NULL;
   }
 
-  /*
-  if (strstr (s, "|") != NULL) {
-    // PIPE_COMMAND should call util again
-    if (comm->command[0] == NULL) {
-      comm->command[0] = parse_pipeline_command (get_char, fp, s);
-    }
-    else if (comm->command[1] == NULL) {
-      comm->command[1] = parse_pipeline_command (get_char, fp, s);
-    }
-    else {
-      comm->command[2] = parse_pipeline_command (get_char, fp, s);
-    }
-  }
+  token = *tokenPTR;
 
-  else if (strstr (s, "(") != NULL) {
-    // create subshell
-    return parse_subshell_command (get_char, fp, s);
-  }
-
-  else if (strcmp(s, "IF", 2)) {
-  */
-  if (!strncmp(s, "if", 2)) {
+  if (!strncmp(token, "if", 2)) {
     // continue until fi statement
     /*    nextToken = ReadNextToken ();
 
@@ -314,14 +310,22 @@ make_command_stream_util(int (*get_next_byte) (void *),
 
     return comm;
     */
-  } else if (!strncmp(s, "while", 5)) {
+  } else if (!strncmp(token, "while", 5)) {
     // continue until done statement
 
-  } else if (!strncmp(s, "until", 5)) {
+  } else if (!strncmp(token, "until", 5)) {
     // continue until done statement
   } else {
     // SIMPLE_COMMAND
-    
+    while (1) {
+      if (type == SPACE) {
+	appendChar(token, ' ');
+	type = readNextToken(tokenPTR, &len, get_next_byte, get_next_byte_argument);
+      } else if (type == NEWLINE) {
+	command = makeSimpleCommand(command, tokenPTR);
+	break;
+      }
+    }
   }
 
   return command;
@@ -337,8 +341,8 @@ make_command_stream (int (*get_next_byte) (void *),
   command_stream_t cur  = NULL;
 
   while (1) {
-    command_t command = NULL; //make_command_stream_util(get_next_byte,
-    //		 get_next_byte_argument);
+    command_t command = makeCommandStreamUtil(get_next_byte,
+					      get_next_byte_argument);
     if (command) {
       cur = AllocateCommandStream();
       cur->command = command;
