@@ -20,7 +20,7 @@
 #include <getopt.h>
 #include <stdbool.h>
 #include <stdio.h>
-
+#include <stdlib.h>
 #include "command.h"
 
 static char const *program_name;
