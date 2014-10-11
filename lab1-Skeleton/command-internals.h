@@ -26,15 +26,6 @@ enum command_type
     WHILE_COMMAND,	 // while A do B done
   };
 
-enum token_type
-  {
-    WORD,           // ASCII
-    PIPE,           // |
-    LEFT_PAR,       // (
-    RIGHT_PAR,      // )
-    SEMICOLON,      // ;
-  };
-
 // Data associated with a command.
 struct command
 {

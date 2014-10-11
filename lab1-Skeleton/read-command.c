@@ -21,11 +21,117 @@
 
 #include <string.h>
 #include <error.h>
-/* FIXME: You may need to add #include directives, macro definitions,
-   static function definitions, etc.  */
 
-/* FIXME: Define the type 'struct command_stream' here.  This should
-   complete the incomplete type declaration in command.h.  */
+#define BUF_SIZE 256
+
+typedef enum TOKENTYPE TOKENTYPE;
+
+enum TOKENTYPE {
+  NOT_DEFINED,
+  SEMICOLON,
+  PIPE,
+  SPACE,
+  NEWLINE,
+  ALPHANUM,
+};
+
+static const char *string[] = {"NOT_DEFINED", "SEMICOLON", "PIPE", "SPACE",
+			       "NEWLINE", "ALPHANUM"};
+
+TOKENTYPE getTokenType(char c)
+{
+  TOKENTYPE type = NOT_DEFINED;
+
+  switch (c) {
+  case ';':
+    type = SEMICOLON;
+    break;
+  case ' ':
+    type = SPACE;
+    break;
+  case '|':
+    type = PIPE;
+    break;
+  case '\n':
+    type = NEWLINE;
+    break;
+    //  case '(':
+  default:
+    type = ALPHANUM;
+    break;
+  }
+  return type;
+}
+
+void ignoreWhiteSpace(int (*get_next_byte) (void *),
+		      void *get_next_byte_argument)
+{
+  char c;
+
+  while ((c = get_next_byte(get_next_byte_argument)) != EOF &&
+	 (c == ' ' || c == '\n')) {
+    ;
+  }
+  if (c != EOF) {
+    fseek(get_next_byte_argument, -1, SEEK_CUR);
+  }
+}
+
+int
+readNextToken(char **t, int *tlen, int (*get_next_byte) (void *),
+              void *get_next_byte_argument)
+{
+  char c;
+  char *token;
+  int len = 0;
+  int maxLen = BUF_SIZE;
+  TOKENTYPE type = NOT_DEFINED;
+
+  if (*tlen) {
+    len = strlen(*t);
+    token = *t;
+    maxLen = *tlen;
+  } else {
+    token = malloc(BUF_SIZE);
+    len = 0;
+    maxLen = BUF_SIZE;
+  }
+
+  ignoreWhiteSpace(get_next_byte, get_next_byte_argument);
+
+  while ((c = get_next_byte(get_next_byte_argument)) != EOF) {
+    type = getTokenType(c);
+    if (type == ALPHANUM) {
+      token[len++] = c;
+      if (len + 1 == maxLen) {
+	maxLen *= 2;
+	token = realloc(token, maxLen);
+      }
+    } else if (type == SPACE) {
+      while ((c = get_next_byte(get_next_byte_argument)) != EOF && c == ' ') {
+	;
+      }
+      if (getTokenType(c) == ALPHANUM) {
+	fseek(get_next_byte_argument, -1, SEEK_CUR);
+      } else {
+	type = getTokenType(c);
+      }
+      break;
+    } else {
+      break;
+    }
+  }
+
+  if (len == 0) {
+    *t = NULL;
+    free(token);
+  } else {
+    token[len] = '\0';
+    *t = token;
+    *tlen = maxLen;
+  }
+  return type;
+}
 
 command_stream_t
 AllocateCommandStream()
@@ -39,37 +145,15 @@ AllocateCommandStream()
   return node;
 }
 
-
-int
-ReadNextToken(char **t, int (*get_next_byte) (void *),
-	      void *get_next_byte_argument)
+command_stream_t
+AllocateCommand()
 {
-  return 0;
+  command_t command = NULL;
+
+  command = checked_malloc(sizeof(struct command));
+  memset(command, 0, sizeof(struct command));
+  return command;
 }
-  /*
-  char c;
-  char *token = checked_malloc(;
-
-  if (!t) {
-    return -1; // Replace with error code
-  }
-
-  while ((c = get_next_byte(get_next_byte_argument)) != EOF) {
-    switch (c) {
-    case ' ':
-      break;
-    case ';':
-      break;
-    case '|':
-      break;
-    default:
-      break;
-    }
-  }
-  return ;
-}
-
-*/
 
 command_t
 parse_pipeline_command (char *get_char, File *fp, char *s) {
@@ -122,11 +206,24 @@ make_simple_command (char *s) {
 
 
 command_t
-make_command_stream_util (char *get_char, File *fp) {
-  char *s = ReadNextToken ();
+make_command_stream_util(int (*get_next_byte) (void *),
+			 void *get_next_byte_argument)
+{
+  char *s;
   char *nextToken;
-  command_t comm;
+  TOKENTYPE type;
+  command_t command;
 
+  type = readnexttoken(&s);
+  if (!s) {
+    return NULL;
+  }
+  command = AllocateCommand();
+  if (!command) {
+    return NULL;
+  }
+
+  /*
   if (strstr (s, "|") != NULL) {
     // PIPE_COMMAND should call util again
     if (comm->command[0] == NULL) {
@@ -146,8 +243,10 @@ make_command_stream_util (char *get_char, File *fp) {
   }
 
   else if (strcmp(s, "IF", 2)) {
+  */
+  if (!strncmp(s, "if", 2)) {
     // continue until fi statement
-    nextToken = ReadNextToken ();
+    /*    nextToken = ReadNextToken ();
 
     while (!strcmp(nextToken, "THEN", 2)) {
       s = strcat (s, nextToken);
@@ -212,19 +311,13 @@ make_command_stream_util (char *get_char, File *fp) {
     }
 
     return comm;
-  }
-
-  else if (strcmp(s, "WHILE", 5)) {
+    */
+  } else if (!strncmp(s, "while", 5)) {
     // continue until done statement
 
-
-  }
-  else if (strcmp(s, "UNTIL", 5)) {
+  } else if (!strncmp(s, "until", 5)) {
     // continue until done statement
-
-  }
-
-  else {
+  } else {
     // SIMPLE_COMMAND
     
   }
