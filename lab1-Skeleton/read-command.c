@@ -97,7 +97,7 @@ make_command_stream_util (char *get_char, File *fp) {
 
   else if (strcmp(s, "IF", 2)) {
     // continue until then statement
-
+    
 
   }
   else if (strcmp(s, "WHILE", 5)) {
