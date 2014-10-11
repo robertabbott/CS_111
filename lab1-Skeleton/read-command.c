@@ -21,7 +21,7 @@
 
 #include <string.h>
 #include <error.h>
-
+#include <stdio.h>
 #define BUF_SIZE 256
 
 typedef enum TOKENTYPE TOKENTYPE;
@@ -145,7 +145,7 @@ AllocateCommandStream()
   return node;
 }
 
-command_stream_t
+command_t
 AllocateCommand()
 {
   command_t command = NULL;
@@ -155,6 +155,7 @@ AllocateCommand()
   return command;
 }
 
+/*
 command_t
 parse_pipeline_command (char *get_char, File *fp, char *s) {
   // parse into A | B format
@@ -203,7 +204,7 @@ make_simple_command (char *s) {
 
   return c;
 }
-
+*/
 
 command_t
 make_command_stream_util(int (*get_next_byte) (void *),
@@ -211,10 +212,11 @@ make_command_stream_util(int (*get_next_byte) (void *),
 {
   char *s;
   char *nextToken;
+  int len = 0;
   TOKENTYPE type;
   command_t command;
 
-  type = readnexttoken(&s);
+  type = readNextToken(&s, &len, get_next_byte, get_next_byte_argument);
   if (!s) {
     return NULL;
   }
@@ -322,7 +324,7 @@ make_command_stream_util(int (*get_next_byte) (void *),
     
   }
 
-  return comm;
+  return command;
 }
 
 
