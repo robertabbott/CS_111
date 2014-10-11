@@ -48,3 +48,9 @@ struct command
     struct command *command[3];
   } u;
 };
+
+struct command_stream
+{
+  struct command *cmd;
+  struct command_stream *next;
+};
