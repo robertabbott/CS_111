@@ -74,17 +74,45 @@ parse_pipeline_command (char *get_char, File *fp, char *s) {
   pipe_comm->type = PIPE_COMMAND;
 
   arg1_index = strstr(s, "|");
-  pipe_comm[0] = s[0:arg1_index]
-  pipe_comm[1] = ReadNextToken ();
+  strncpy (pipe_comm->command[0], s, arg1_index-1);
+  s = ReadNextToken ();
 
+  if (strstr (s, "|") != NULL) {
+    pipe_comm->command[1] = parse_pipeline_command (get_char, fp, s);
+  }
+  else if (strstr (s, "(") != NULL) {
+    pipe_comm->command[1] = parse_subshell_command (get_char, fp, s);
+  }
+  else {
+    pipe_comm->command[1] = s;
+  }
 
   return pipe_comm;
 }
 
 command_t
 parse_subshell_command (char *get_char, File *fp, char *s) {
+  command_t subshell_command;
+  subshell_command->command[0] = make_command_stream_util (get_char, fp);
+  s = ReadNextToken ();
 
+  if (strstr(s, ")") == NULL) {
+    // error
+  }
+  else {
+    return subshell_command;
+  }
 }
+
+command_t
+make_simple_command (char *s) {
+  command_t c;
+  c->type = SIMPLE_COMMAND;
+  c->word = s;
+
+  return c;
+}
+
 
 command_t
 make_command_stream_util (char *get_char, File *fp) {
@@ -94,38 +122,103 @@ make_command_stream_util (char *get_char, File *fp) {
 
   if (strstr (s, "|") != NULL) {
     // PIPE_COMMAND should call util again
-    comm->command[0] = make_command_stream_util (get_char, fp, s);
+    if (comm->command[0] == NULL) {
+      comm->command[0] = parse_pipeline_command (get_char, fp, s);
+    }
+    else if (comm->command[1] == NULL) {
+      comm->command[1] = parse_pipeline_command (get_char, fp, s);
+    }
+    else {
+      comm->command[2] = parse_pipeline_command (get_char, fp, s);
+    }
   }
 
   else if (strstr (s, "(") != NULL) {
     // create subshell
-
+    return parse_subshell_command (get_char, fp, s);
   }
 
   else if (strcmp(s, "IF", 2)) {
     // continue until fi statement
     nextToken = ReadNextToken ();
-    while (!strcmp(nextToken, "FI", 2)) {
+
+    while (!strcmp(nextToken, "THEN", 2)) {
+      s = strcat (s, nextToken);
       // if pipe command call parse_pipe
-      if (strstr (nextToken, "|") != NULL) {
+      if (strstr (s, "|") != NULL) {
         comm->command[0] = parse_pipeline_command (get_char, fp, nextToken);
       }
-      else if (strstr (nextToken, "(") != NULL) {
+      else if (strstr (s, "(") != NULL) {
         // create sub-shell command
+        comm->command[0] = parse_subshell_command (get_char, fp, nextToken);
       }
-      // otherwise add token to if command
-      else {
-        comm->command[0] = nextToken;
+
+      nextToken = ReadNextToken ();
+    }
+
+    if (comm->command[0] == NULL) {
+      comm->command[0] = make_simple_command(s);
+    }
+
+    // first token after "THEN"
+    nextToken = ReadNextToken ();
+    s = NULL;
+
+    while (!strcmp(nextToken, "FI", 2) && !strcmp(nextToken, "ELSE", 4)) {
+      s = strcat (s, nextToken);
+      // if pipe command, call parse_pipe
+      if (strstr (s, "|") != NULL) {
+        comm->command[1] = parse_pipeline_command (get_char, fp, nextToken);
+      }
+      else if (strstr (s, "(") != NULL) {
+        // create sub-shell command
+        comm->command[1] = parse_subshell_command (get_char, fp, nextToken);
+      }
+
+      nextToken = ReadNextToken ();
+    }
+
+    if (comm->command[1] == NULL) {
+      comm->command[1] = make_simple_command(s);
+    }
+
+    if (strcmp(nextToken, "ELSE", 4)) {
+      nextToken = ReadNextToken ();
+      s = NULL;
+      while (!strcmp(nextToken, "FI", 2)) {
+        s = strcat (s, nextToken);
+        // if pipe command, call parse_pipe
+        if (strstr (s, "|") != NULL) {
+          comm->command[2] = parse_pipeline_command (get_char, fp, nextToken);
+        }
+        else if (strstr (s, "(") != NULL) {
+          // create sub-shell command
+          comm->command[2] = parse_subshell_command (get_char, fp, nextToken);
+        }
+
+        nextToken = ReadNextToken ();
+      }
+
+      if (comm->command[2] != NULL) {
+        comm->command[2] = make_simple_command (s);
       }
     }
 
+    return comm;
   }
+
   else if (strcmp(s, "WHILE", 5)) {
     // continue until done statement
+
 
   }
   else if (strcmp(s, "UNTIL", 5)) {
     // continue until done statement
+
+  }
+
+  else {
+    // SIMPLE_COMMAND
 
   }
 
