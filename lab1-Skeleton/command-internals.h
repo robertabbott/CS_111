@@ -15,6 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+typedef enum command_type command_type;
 enum command_type
   {
     IF_COMMAND,		 // if A then B else C fi

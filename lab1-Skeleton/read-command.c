@@ -177,16 +177,31 @@ makeSimpleCommand(command_t command, char **s)
 }
 
 command_t
-makePipeCommand (command_t command, char **tokenPTR)
+makeCommand(command_t command, char **tokenPTR, command_type type)
 {
   if (!command) {
     command = AllocateCommand();
   }
 
-  command->type = PIPE_COMMAND;
+  command->type = type;
   command->u.command[0] = makeSimpleCommand(NULL, tokenPTR);
 
   return command;
+}
+
+command_t
+convertToSimple(command_t command)
+{
+  command_t simpleCommand;
+
+  if (!command) {
+    return NULL;
+  }
+  simpleCommand = command->u.command[0];
+
+  free(command);
+
+  return simpleCommand;
 }
 
 /*
@@ -215,7 +230,7 @@ makeCommandStreamUtil(int (*get_next_byte) (void *),
   char *nextToken;
   int len = 0;
   TOKENTYPE type;
-  command_t command;
+  command_t command = NULL;
 
   type = readNextToken(tokenPTR, &len, get_next_byte, get_next_byte_argument);
   if (type == NOT_DEFINED) {
@@ -312,12 +327,15 @@ makeCommandStreamUtil(int (*get_next_byte) (void *),
       } else if (type == NEWLINE) {
 	command = makeSimpleCommand(command, tokenPTR);
 	break;
-      } else if (type == PIPE) {
-	command = makePipeCommand(command, tokenPTR);
+      } else if (type == PIPE || type == SEMICOLON) {
+	command = makeCommand(command, tokenPTR, 
+			      type == PIPE ? PIPE_COMMAND : SEQUENCE_COMMAND);
 	command->u.command[1] = makeCommandStreamUtil(get_next_byte,
 						      get_next_byte_argument);
+	if (!command->u.command[1]) {
+	  command = convertToSimple(command);
+	}
 	break;
-
       }
     }
   }
