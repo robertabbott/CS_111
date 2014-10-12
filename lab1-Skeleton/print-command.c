@@ -41,6 +41,11 @@ command_indented_print (int indent, command_t c)
 	  command_indented_print (indent + 2, c->u.command[2]);
 	}
       printf ("\n%*s%s", indent, "", c->type == IF_COMMAND ? "fi" : "done");
+      if ((c->type == UNTIL_COMMAND || c->type == WHILE_COMMAND) &&
+	  c->u.command[2]) {
+	printf ("\n");
+	command_indented_print (indent, c->u.command[2]);
+      }	
       break;
 
     case SEQUENCE_COMMAND:

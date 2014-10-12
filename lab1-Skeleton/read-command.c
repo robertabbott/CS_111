@@ -229,8 +229,9 @@ strrcmp(char *s1, char *s2)
   int len1 = strlen(s1);
   int len2 = strlen(s2);
 
-  while(len1 && len2 && s1[--len1] == s2[--len2]) {
-    ;
+  while(len1 && len2 && s1[len1 - 1] == s2[len2 - 1]) {
+    len1--;
+    len2--;
   }
   if (len2) {
     return 1; // not equal
@@ -344,7 +345,7 @@ makeCommandStreamUtil(int (*get_next_byte) (void *),
     if (*state != ELSE && *state != FI) {
       // HANDLE error;
       ;
-    } else if (*state == ELSE) {
+    } else if (*state == ELSE || (*state == FI && *CScount)) {
 	command->u.command[2] = makeCommandStreamUtil(get_next_byte,
 						      get_next_byte_argument,
 						      state, CScount);
@@ -368,6 +369,10 @@ makeCommandStreamUtil(int (*get_next_byte) (void *),
     if (*state != DONE) {
       // HANDLE error;
       ;
+    } else if (*state == DONE && *CScount) {
+      command->u.command[2] = makeCommandStreamUtil(get_next_byte,
+						    get_next_byte_argument,
+						    state, CScount);
     } else {
       command->u.command[2] = NULL;
     }    
@@ -388,6 +393,10 @@ makeCommandStreamUtil(int (*get_next_byte) (void *),
     if (*state != DONE) {
       // HANDLE error;
       ;
+    } else if (*state == DONE && *CScount) {
+      command->u.command[2] = makeCommandStreamUtil(get_next_byte,
+						    get_next_byte_argument,
+						    state, CScount);
     } else {
       command->u.command[2] = NULL;
     }    
