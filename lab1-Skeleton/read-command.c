@@ -33,6 +33,8 @@ enum TOKENTYPE {
   SPACE,
   NEWLINE,
   ALPHANUM,
+  O_PAR,
+  C_PAR
 };
 
 static const char *string[] = {"NOT_DEFINED", "SEMICOLON", "PIPE", "SPACE",
@@ -74,7 +76,11 @@ TOKENTYPE getTokenType(char c)
   case '\n':
     type = NEWLINE;
     break;
-    //  case '(':
+  case '(':
+    type = O_PAR;
+    break;
+  case ')':
+    type = C_PAR;
   default:
     type = ALPHANUM;
     break;
@@ -131,19 +137,25 @@ readNextToken(char **t, int *tlen, int (*get_next_byte) (void *),
     if (type == ALPHANUM) {
       token[len++] = c;
       if (len + 1 == maxLen) {
-	maxLen *= 2;
-	token = realloc(token, maxLen);
+      	maxLen *= 2;
+      	token = realloc(token, maxLen);
       }
     } else if (type == SPACE) {
-      while ((c = get_next_byte(get_next_byte_argument)) != EOF && c == ' ') {
-	;
-      }
-      if (getTokenType(c) == ALPHANUM) {
-	fseek(get_next_byte_argument, -1, SEEK_CUR);
-      } else {
-	type = getTokenType(c);
-      }
-      break;
+        while ((c = get_next_byte(get_next_byte_argument)) != EOF && c == ' ') {
+  	       ;
+        }
+        if (getTokenType(c) == ALPHANUM) {
+  	       fseek(get_next_byte_argument, -1, SEEK_CUR);
+        } else if (getTokenType(c) == O_PAR) {
+           fseek(get_next_byte_argument, -1, SEEK_CUR);
+        } else {
+  	       type = getTokenType(c);
+        }
+        break;
+    } else if (type == O_PAR) {
+        *t = token;
+        *tlen += 1;
+        return type;
     } else {
       break;
     }
@@ -287,6 +299,10 @@ makeCommandStreamUtil(int (*get_next_byte) (void *),
   if (type == NOT_DEFINED) {
     free(tokenPTR);
     return NULL;
+  } else if (type == O_PAR) {
+    token = "(";
+  } else {
+    token = *tokenPTR;
   }
 
   command = AllocateCommand();
@@ -294,7 +310,6 @@ makeCommandStreamUtil(int (*get_next_byte) (void *),
     return NULL;
   }
 
-  token = *tokenPTR;
 
   if (!strncmp(token, "then", 4)) {
     *state = THEN;
@@ -392,7 +407,6 @@ makeCommandStreamUtil(int (*get_next_byte) (void *),
     }    
 
   } else if (!strncmp(token, "(", 1)) {
-    (*CScount)++;
     command = makeCommand(command, NULL, SUBSHELL_COMMAND);
     free(tokenPTR);
     command->u.command[0] =  makeCommandStreamUtil(get_next_byte,
