@@ -331,7 +331,6 @@ makeCommandStreamUtil(int (*get_next_byte) (void *),
     command->u.command[0] = makeCommandStreamUtil(get_next_byte,
 						  get_next_byte_argument, state);
     if (*state != THEN) {
-      // Handle Error
       ;
     }
     command->u.command[1] = makeCommandStreamUtil(get_next_byte,
@@ -347,21 +346,51 @@ makeCommandStreamUtil(int (*get_next_byte) (void *),
       command->u.command[2] = NULL;
     }
   } else if (!strncmp(token, "while", 5)) {
-    // continue until done statement
-
+    command = makeCommand(command, NULL, WHILE_COMMAND);
+    free(tokenPTR);
+    command->u.command[0] = makeCommandStreamUtil(get_next_byte,
+						  get_next_byte_argument, state);
+    if (*state != DO) {
+      // Handle Error
+      ;
+    }
+    command->u.command[1] = makeCommandStreamUtil(get_next_byte,
+						  get_next_byte_argument, state);
+    if (*state != DONE) {
+      // HANDLE error;
+      ;
+    } else {
+      command->u.command[2] = NULL;
+    }    
   } else if (!strncmp(token, "until", 5)) {
-    // continue until done statement
+    command = makeCommand(command, NULL, UNTIL_COMMAND);
+    free(tokenPTR);
+    command->u.command[0] = makeCommandStreamUtil(get_next_byte,
+						  get_next_byte_argument, state);
+    if (*state != DO) {
+      // Handle Error
+      ;
+    }
+    command->u.command[1] = makeCommandStreamUtil(get_next_byte,
+						  get_next_byte_argument, state);
+    if (*state != DONE) {
+      // HANDLE error;
+      ;
+    } else {
+      command->u.command[2] = NULL;
+    }    
+
   } else {
     // SIMPLE_COMMAND
     while (1) {
       STATE prevState = *state;
       if (isKeyWordUpdate(token, state) && (prevState == COMMAND)) {
+ 	removeWhiteSpace(token);
 	command = makeSimpleCommand(command, tokenPTR);
 	break;
       }
       if (type == SPACE) {
 	appendChar(token, ' ');
-	removeWhiteSpace(token);
 	type = readNextToken(tokenPTR, &len, get_next_byte, get_next_byte_argument);
       } else if (type == NEWLINE) {
 	command = makeSimpleCommand(command, tokenPTR);
@@ -396,9 +425,10 @@ make_command_stream (int (*get_next_byte) (void *),
   command_stream_t head = NULL;
   command_stream_t prev = NULL;
   command_stream_t cur  = NULL;
-  STATE state = INVALID;
+  STATE state;
 
   while (1) {
+    state = INVALID;
     command_t command = makeCommandStreamUtil(get_next_byte,
 					      get_next_byte_argument,
 					      &state);
