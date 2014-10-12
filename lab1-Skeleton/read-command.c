@@ -287,7 +287,7 @@ parse_subshell_command (char *get_char, File *fp, char *s) {
 command_t
 makeCommandStreamUtil(int (*get_next_byte) (void *),
 		      void *get_next_byte_argument,
-		      STATE *state)
+		      STATE *state, int *CScount)
 {
   char **tokenPTR = checked_malloc(sizeof(char**));
   char *token = NULL;
@@ -314,6 +314,7 @@ makeCommandStreamUtil(int (*get_next_byte) (void *),
     goto ret_null;
   } else if (!strncmp(token, "done", 4)) {
     *state = DONE;
+    (*CScount)--;
     goto ret_null;
   } else if (!strncmp(token, "do", 4)) {
     *state = DO;
@@ -321,41 +322,49 @@ makeCommandStreamUtil(int (*get_next_byte) (void *),
   } else if (!strncmp(token, "else", 4)) {
     *state = ELSE;
     goto ret_null;
-
   } else if (!strncmp(token, "fi", 4)) {
+    (*CScount)--;
     *state = FI;
     goto ret_null;
   } else if (!strncmp(token, "if", 2)) {
+    (*CScount)++;
     command = makeCommand(command, NULL, IF_COMMAND);
     free(tokenPTR);
     command->u.command[0] = makeCommandStreamUtil(get_next_byte,
-						  get_next_byte_argument, state);
-    if (*state != THEN) {
-      ;
+						  get_next_byte_argument,
+						  state, CScount);
+    while (*state != THEN) {
+      makeCommandStreamUtil(get_next_byte,
+			    get_next_byte_argument,
+			    state, CScount);
     }
     command->u.command[1] = makeCommandStreamUtil(get_next_byte,
-						  get_next_byte_argument, state);
+						  get_next_byte_argument,
+						  state, CScount);
     if (*state != ELSE && *state != FI) {
       // HANDLE error;
       ;
     } else if (*state == ELSE) {
 	command->u.command[2] = makeCommandStreamUtil(get_next_byte,
 						      get_next_byte_argument,
-						      state);
+						      state, CScount);
     } else {
       command->u.command[2] = NULL;
     }
   } else if (!strncmp(token, "while", 5)) {
+    (*CScount)++;
     command = makeCommand(command, NULL, WHILE_COMMAND);
     free(tokenPTR);
     command->u.command[0] = makeCommandStreamUtil(get_next_byte,
-						  get_next_byte_argument, state);
+						  get_next_byte_argument,
+						  state, CScount);
     if (*state != DO) {
       // Handle Error
       ;
     }
     command->u.command[1] = makeCommandStreamUtil(get_next_byte,
-						  get_next_byte_argument, state);
+						  get_next_byte_argument,
+						  state, CScount);
     if (*state != DONE) {
       // HANDLE error;
       ;
@@ -363,16 +372,19 @@ makeCommandStreamUtil(int (*get_next_byte) (void *),
       command->u.command[2] = NULL;
     }    
   } else if (!strncmp(token, "until", 5)) {
+    (*CScount)++;
     command = makeCommand(command, NULL, UNTIL_COMMAND);
     free(tokenPTR);
     command->u.command[0] = makeCommandStreamUtil(get_next_byte,
-						  get_next_byte_argument, state);
+						  get_next_byte_argument,
+						  state, CScount);
     if (*state != DO) {
       // Handle Error
       ;
     }
     command->u.command[1] = makeCommandStreamUtil(get_next_byte,
-						  get_next_byte_argument, state);
+						  get_next_byte_argument,
+						  state, CScount);
     if (*state != DONE) {
       // HANDLE error;
       ;
@@ -392,15 +404,15 @@ makeCommandStreamUtil(int (*get_next_byte) (void *),
       if (type == SPACE) {
 	appendChar(token, ' ');
 	type = readNextToken(tokenPTR, &len, get_next_byte, get_next_byte_argument);
-      } else if (type == NEWLINE) {
-	command = makeSimpleCommand(command, tokenPTR);
-	break;
-      } else if (type == PIPE || type == SEMICOLON) {
+      } else if (type == NEWLINE && !(*CScount)) {
+      	command = makeSimpleCommand(command, tokenPTR);
+      	break;
+      } else if (type == PIPE || type == SEMICOLON || type == NEWLINE) {
 	command = makeCommand(command, tokenPTR, 
 			      type == PIPE ? PIPE_COMMAND : SEQUENCE_COMMAND);
 	command->u.command[1] = makeCommandStreamUtil(get_next_byte,
 						      get_next_byte_argument,
-						      state);
+						      state, CScount);
 	if (!command->u.command[1]) {
 	  command = convertToSimple(command);
 	}
@@ -426,12 +438,14 @@ make_command_stream (int (*get_next_byte) (void *),
   command_stream_t prev = NULL;
   command_stream_t cur  = NULL;
   STATE state;
+  int CScount = 0; // Control Statement count
 
   while (1) {
     state = INVALID;
+    CScount = 0;
     command_t command = makeCommandStreamUtil(get_next_byte,
 					      get_next_byte_argument,
-					      &state);
+					      &state, &CScount);
     if (command) {
       cur = AllocateCommandStream();
       cur->command = command;
