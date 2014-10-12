@@ -38,6 +38,23 @@ enum TOKENTYPE {
 static const char *string[] = {"NOT_DEFINED", "SEMICOLON", "PIPE", "SPACE",
 			       "NEWLINE", "ALPHANUM"};
 
+typedef struct KeyWords {
+  char *keyword;
+  STATE state;
+} KeyWords;
+
+KeyWords keywords[] = {
+  {"if", IF},
+  {"then", THEN},
+  {"else", ELSE},
+  {"fi", FI},
+  {"while", WHILE},
+  {"do", DO},
+  {"done", DONE},
+  {"until", UNTIL},
+  {NULL, INVALID},
+};
+
 TOKENTYPE getTokenType(char c)
 {
   TOKENTYPE type = NOT_DEFINED;
@@ -184,7 +201,9 @@ makeCommand(command_t command, char **tokenPTR, command_type type)
   }
 
   command->type = type;
-  command->u.command[0] = makeSimpleCommand(NULL, tokenPTR);
+  if (tokenPTR) {
+    command->u.command[0] = makeSimpleCommand(NULL, tokenPTR);
+  }
 
   return command;
 }
@@ -202,6 +221,50 @@ convertToSimple(command_t command)
   free(command);
 
   return simpleCommand;
+}
+
+int
+strrcmp(char *s1, char *s2)
+{
+  int len1 = strlen(s1);
+  int len2 = strlen(s2);
+
+  while(len1 && len2 && s1[--len1] == s2[--len2]) {
+    ;
+  }
+  if (len2) {
+    return 1; // not equal
+  } else {
+    return 0; // equal
+  }
+}
+
+int
+isKeyWordUpdate(char *token, STATE *state)
+{
+  int flag = 0;
+  int i = 0;
+
+  while (keywords[i].keyword) {
+    if (!strrcmp(token, keywords[i].keyword)) {
+      token[strlen(token) - strlen(keywords[i].keyword)] = '\0';
+      *state = keywords[i].state;
+      flag = 1;
+      break;
+    }
+  i++;
+  }
+  return flag;
+}
+
+void removeWhiteSpace(char *token)
+{
+  int len = strlen(token);
+  while (token[len - 1] == ' ' ||
+	 token[len - 1] == '\n') {
+    len--;
+  }
+  token[len] = '\0';
 }
 
 /*
@@ -223,7 +286,8 @@ parse_subshell_command (char *get_char, File *fp, char *s) {
 
 command_t
 makeCommandStreamUtil(int (*get_next_byte) (void *),
-		      void *get_next_byte_argument)
+		      void *get_next_byte_argument,
+		      STATE *state)
 {
   char **tokenPTR = checked_malloc(sizeof(char**));
   char *token = NULL;
@@ -245,74 +309,43 @@ makeCommandStreamUtil(int (*get_next_byte) (void *),
 
   token = *tokenPTR;
 
-  if (!strncmp(token, "if", 2)) {
-    // continue until fi statement
-    /*    nextToken = ReadNextToken ();
+  if (!strncmp(token, "then", 4)) {
+    *state = THEN;
+    goto ret_null;
+  } else if (!strncmp(token, "done", 4)) {
+    *state = DONE;
+    goto ret_null;
+  } else if (!strncmp(token, "do", 4)) {
+    *state = DO;
+    goto ret_null;
+  } else if (!strncmp(token, "else", 4)) {
+    *state = ELSE;
+    goto ret_null;
 
-    while (!strcmp(nextToken, "THEN", 2)) {
-      s = strcat (s, nextToken);
-      // if pipe command call parse_pipe
-      if (strstr (s, "|") != NULL) {
-        comm->command[0] = parse_pipeline_command (get_char, fp, nextToken);
-      }
-      else if (strstr (s, "(") != NULL) {
-        // create sub-shell command
-        comm->command[0] = parse_subshell_command (get_char, fp, nextToken);
-      }
-
-      nextToken = ReadNextToken ();
+  } else if (!strncmp(token, "fi", 4)) {
+    *state = FI;
+    goto ret_null;
+  } else if (!strncmp(token, "if", 2)) {
+    command = makeCommand(command, NULL, IF_COMMAND);
+    free(tokenPTR);
+    command->u.command[0] = makeCommandStreamUtil(get_next_byte,
+						  get_next_byte_argument, state);
+    if (*state != THEN) {
+      // Handle Error
+      ;
     }
-
-    if (comm->command[0] == NULL) {
-      comm->command[0] = make_simple_command(s);
+    command->u.command[1] = makeCommandStreamUtil(get_next_byte,
+						  get_next_byte_argument, state);
+    if (*state != ELSE && *state != FI) {
+      // HANDLE error;
+      ;
+    } else if (*state == ELSE) {
+	command->u.command[2] = makeCommandStreamUtil(get_next_byte,
+						      get_next_byte_argument,
+						      state);
+    } else {
+      command->u.command[2] = NULL;
     }
-
-    // first token after "THEN"
-    nextToken = ReadNextToken ();
-    s = NULL;
-
-    while (!strcmp(nextToken, "FI", 2) && !strcmp(nextToken, "ELSE", 4)) {
-      s = strcat (s, nextToken);
-      // if pipe command, call parse_pipe
-      if (strstr (s, "|") != NULL) {
-        comm->command[1] = parse_pipeline_command (get_char, fp, nextToken);
-      }
-      else if (strstr (s, "(") != NULL) {
-        // create sub-shell command
-        comm->command[1] = parse_subshell_command (get_char, fp, nextToken);
-      }
-
-      nextToken = ReadNextToken ();
-    }
-
-    if (comm->command[1] == NULL) {
-      comm->command[1] = make_simple_command(s);
-    }
-
-    if (strcmp(nextToken, "ELSE", 4)) {
-      nextToken = ReadNextToken ();
-      s = NULL;
-      while (!strcmp(nextToken, "FI", 2)) {
-        s = strcat (s, nextToken);
-        // if pipe command, call parse_pipe
-        if (strstr (s, "|") != NULL) {
-          comm->command[2] = parse_pipeline_command (get_char, fp, nextToken);
-        }
-        else if (strstr (s, "(") != NULL) {
-          // create sub-shell command
-          comm->command[2] = parse_subshell_command (get_char, fp, nextToken);
-        }
-
-        nextToken = ReadNextToken ();
-      }
-
-      if (comm->command[2] != NULL) {
-        comm->command[2] = make_simple_command (s);
-      }
-    }
-
-    return comm;
-    */
   } else if (!strncmp(token, "while", 5)) {
     // continue until done statement
 
@@ -321,8 +354,14 @@ makeCommandStreamUtil(int (*get_next_byte) (void *),
   } else {
     // SIMPLE_COMMAND
     while (1) {
+      STATE prevState = *state;
+      if (isKeyWordUpdate(token, state) && (prevState == COMMAND)) {
+	command = makeSimpleCommand(command, tokenPTR);
+	break;
+      }
       if (type == SPACE) {
 	appendChar(token, ' ');
+	removeWhiteSpace(token);
 	type = readNextToken(tokenPTR, &len, get_next_byte, get_next_byte_argument);
       } else if (type == NEWLINE) {
 	command = makeSimpleCommand(command, tokenPTR);
@@ -331,16 +370,22 @@ makeCommandStreamUtil(int (*get_next_byte) (void *),
 	command = makeCommand(command, tokenPTR, 
 			      type == PIPE ? PIPE_COMMAND : SEQUENCE_COMMAND);
 	command->u.command[1] = makeCommandStreamUtil(get_next_byte,
-						      get_next_byte_argument);
+						      get_next_byte_argument,
+						      state);
 	if (!command->u.command[1]) {
 	  command = convertToSimple(command);
 	}
 	break;
       }
+      *state = COMMAND;
     }
   }
 
   return command;
+ret_null:
+  free(command);
+  free(tokenPTR);
+  return NULL;
 }
 
 
@@ -351,10 +396,12 @@ make_command_stream (int (*get_next_byte) (void *),
   command_stream_t head = NULL;
   command_stream_t prev = NULL;
   command_stream_t cur  = NULL;
+  STATE state = INVALID;
 
   while (1) {
     command_t command = makeCommandStreamUtil(get_next_byte,
-					      get_next_byte_argument);
+					      get_next_byte_argument,
+					      &state);
     if (command) {
       cur = AllocateCommandStream();
       cur->command = command;

@@ -27,6 +27,20 @@ enum command_type
     WHILE_COMMAND,	 // while A do B done
   };
 
+typedef enum STATE STATE;
+enum STATE {
+  INVALID,
+  IF,
+  THEN,
+  ELSE,
+  FI,
+  WHILE,
+  DO,
+  UNTIL,
+  DONE,
+  COMMAND,
+};
+
 // Data associated with a command.
 struct command
 {
