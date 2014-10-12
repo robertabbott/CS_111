@@ -37,6 +37,8 @@ enum STATE {
   WHILE,
   DO,
   UNTIL,
+  OPEN_PAR,
+  CLOSE_PAR,
   DONE,
   COMMAND,
 };

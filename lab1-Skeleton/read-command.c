@@ -20,7 +20,7 @@
 #include "alloc.h"
 
 #include <string.h>
-#include <error.h>
+// #include <error.h>
 #include <stdio.h>
 #define BUF_SIZE 256
 
@@ -52,6 +52,8 @@ KeyWords keywords[] = {
   {"do", DO},
   {"done", DONE},
   {"until", UNTIL},
+  {"(", OPEN_PAR},
+  {")", CLOSE_PAR},
   {NULL, INVALID},
 };
 
@@ -268,22 +270,6 @@ void removeWhiteSpace(char *token)
   token[len] = '\0';
 }
 
-/*
-command_t
-parse_subshell_command (char *get_char, File *fp, char *s) {
-  command_t subshell_command;
-  subshell_command->command[0] = make_command_stream_util (get_char, fp);
-  s = ReadNextToken ();
-
-  if (strstr(s, ")") == NULL) {
-    // error
-  }
-  else {
-    return subshell_command;
-  }
-}
-
-*/
 
 command_t
 makeCommandStreamUtil(int (*get_next_byte) (void *),
@@ -326,6 +312,10 @@ makeCommandStreamUtil(int (*get_next_byte) (void *),
   } else if (!strncmp(token, "fi", 4)) {
     (*CScount)--;
     *state = FI;
+    goto ret_null;
+  } else if (!strncmp(token, ")", 1)) {
+    (*CScount) --;
+    *state = CLOSE_PAR;
     goto ret_null;
   } else if (!strncmp(token, "if", 2)) {
     (*CScount)++;
@@ -401,14 +391,29 @@ makeCommandStreamUtil(int (*get_next_byte) (void *),
       command->u.command[2] = NULL;
     }    
 
+  } else if (!strncmp(token, "(", 1)) {
+    (*CScount)++;
+    command = makeCommand(command, NULL, SUBSHELL_COMMAND);
+    free(tokenPTR);
+    command->u.command[0] =  makeCommandStreamUtil(get_next_byte,
+              get_next_byte_argument,
+              state, CScount);
+    if (*state != CLOSE_PAR) {
+      // Handle Error
+    } else if (*state == CLOSE_PAR && *CScount) {
+      command->u.command[0] = makeCommandStreamUtil(get_next_byte,
+                get_next_byte_argument,
+                state, CScount);
+    }
+
   } else {
     // SIMPLE_COMMAND
     while (1) {
       STATE prevState = *state;
       if (isKeyWordUpdate(token, state) && (prevState == COMMAND)) {
- 	removeWhiteSpace(token);
-	command = makeSimpleCommand(command, tokenPTR);
-	break;
+         	removeWhiteSpace(token);
+        	command = makeSimpleCommand(command, tokenPTR);
+        	break;
       }
       if (type == SPACE) {
 	appendChar(token, ' ');
