@@ -93,10 +93,10 @@ TOKENTYPE getTokenType(char c)
     type = O_PAR;
     break;
   case '>':
-    type = REDIRECTION1;
+    type = REDIRECTION2;
     break;
   case '<':
-    type = REDIRECTION2;
+    type = REDIRECTION1;
     break;
   case ')':
     type = C_PAR;
@@ -169,15 +169,20 @@ readNextToken(char **t, int *tlen, int (*get_next_byte) (void *),
       	token = realloc(token, maxLen);
       }
     } else if (type == SPACE) {
-        while ((c = get_next_byte(get_next_byte_argument)) != EOF && c == ' ') {
-  	       ;
-        }
-	type = getTokenType(c);
-        if (type == ALPHANUM || type == O_PAR ||
-	    type == REDIRECTION1 || type == REDIRECTION2) {
-	  _rewind(get_next_byte_argument, -1);
-	}
-        break;
+      int val;
+      while ((c = get_next_byte(get_next_byte_argument)) != EOF && c == ' ') {
+	;
+      }
+      val = getTokenType(c);
+      if (val == ALPHANUM || val == O_PAR || val == PIPE) {
+	_rewind(get_next_byte_argument, -1);
+      } else if (val == REDIRECTION1 || val == REDIRECTION2) {
+	_rewind(get_next_byte_argument, -1);
+	type = val;
+      } else {
+	type = val;
+      }
+      break;
     } else if (type == O_PAR) {
         *t = token;
         *tlen += 1;
@@ -190,14 +195,14 @@ readNextToken(char **t, int *tlen, int (*get_next_byte) (void *),
     }
   }
 
-  if (len == 0) {
-    *t = NULL;
-    free(token);
-  } else {
+  /* if (len == 0) { */
+  /*   *t = NULL; */
+  /*   free(token); */
+  /* } else { */
     token[len] = '\0';
     *t = token;
     *tlen = maxLen;
-  }
+    //  }
   return type;
 }
 
@@ -208,20 +213,22 @@ fillRedirectionOperands(char **input, char **output,
 			void *get_next_byte_argument)
 {
   int len = 0;
+  TOKENTYPE type = 0;
 
   while (1) {
     len = 0;
-    switch (getTokenType(get_next_byte(get_next_byte_argument))) {
+    type = getTokenType(get_next_byte(get_next_byte_argument));
+    switch (type) {
     case REDIRECTION1:
-      readNextToken(input, &len, get_next_byte,
-		    get_next_byte_argument);
+      type = readNextToken(input, &len, get_next_byte,
+			   get_next_byte_argument);
       if (!(*input)) {
 	goto err;
       }
       break;
     case REDIRECTION2:
-      readNextToken(output, &len, get_next_byte,
-		    get_next_byte_argument);
+      type = readNextToken(output, &len, get_next_byte,
+			   get_next_byte_argument);
       if (!(*output)) {
 	goto err;
       }
@@ -230,9 +237,14 @@ fillRedirectionOperands(char **input, char **output,
       _rewind(get_next_byte_argument, -1);
       goto out;
     }
+    if (type == REDIRECTION2 || type == REDIRECTION1) {
+      continue;
+    } else {
+      break;
+    }
   }
  out:
-  return 0;
+  return type;
  err:
   printErr();
   return -1;
@@ -288,11 +300,11 @@ command_t
 makeCommand(command_t command, char **tokenPTR, command_type type,
 	    char *input, char *output)
 {
-  command = makeBaseCommand(command, input, output);
+  command = makeBaseCommand(command, NULL, NULL);
 
   command->type = type;
   if (tokenPTR) {
-    command->u.command[0] = makeSimpleCommand(NULL, tokenPTR, NULL, NULL);
+    command->u.command[0] = makeSimpleCommand(NULL, tokenPTR, input, output);
   }
 
   return command;
@@ -483,6 +495,7 @@ makeCommandStreamUtil(int (*get_next_byte) (void *),
       // HANDLE error;
       ;
     } else if (*state == DONE && CScount) {
+      
       command->u.command[2] = makeCommandStreamUtil(get_next_byte,
 						    get_next_byte_argument,
 						    state);
@@ -515,13 +528,14 @@ makeCommandStreamUtil(int (*get_next_byte) (void *),
         	break;
       }
       if (type == REDIRECTION1 || type == REDIRECTION2) {
-	fillRedirectionOperands(&input,
-				&output,
-				get_next_byte,
-				get_next_byte_argument);
+	type = fillRedirectionOperands(&input,
+				       &output,
+				       get_next_byte,
+				       get_next_byte_argument);
 
-	command = makeSimpleCommand(command, tokenPTR, input, output);
-        break;
+	//	command = makeSimpleCommand(command, tokenPTR, input, output);
+	//        break;
+	//	type = readNextToken(tokenPTR, &len, get_next_byte, get_next_byte_argument);
       } else if (type == SPACE) {
 	appendChar(token, ' ');
 	type = readNextToken(tokenPTR, &len, get_next_byte, get_next_byte_argument);
@@ -529,6 +543,7 @@ makeCommandStreamUtil(int (*get_next_byte) (void *),
       	command = makeSimpleCommand(command, tokenPTR, input, output);
       	break;
       } else if (type == PIPE || type == SEMICOLON || type == NEWLINE) {
+	removeWhiteSpace(token);
 	command = makeCommand(command, tokenPTR, 
 			      type == PIPE ? PIPE_COMMAND : SEQUENCE_COMMAND,
 			      input, output);
