@@ -33,12 +33,15 @@ enum TOKENTYPE {
   SPACE,
   NEWLINE,
   ALPHANUM,
+  REDIRECTION1,
+  REDIRECTION2,
   O_PAR,
   C_PAR
 };
 
 int lineNumber = 0;
 int CScount;
+int backquote;
 
 /* static const char *string[] = {"NOT_DEFINED", "SEMICOLON", "PIPE", "SPACE", */
 /* 			       "NEWLINE", "ALPHANUM"}; */
@@ -63,6 +66,12 @@ KeyWords keywords[] = {
   {NULL, INVALID, 0},
 };
 
+void printErr()
+{
+  fprintf (stderr, "Syntax err at line %d\n", lineNumber);
+  exit(-1);
+}
+
 TOKENTYPE getTokenType(char c)
 {
   TOKENTYPE type = NOT_DEFINED;
@@ -83,6 +92,12 @@ TOKENTYPE getTokenType(char c)
   case '(':
     type = O_PAR;
     break;
+  case '>':
+    type = REDIRECTION1;
+    break;
+  case '<':
+    type = REDIRECTION2;
+    break;
   case ')':
     type = C_PAR;
   default:
@@ -100,6 +115,12 @@ void appendChar(char *s, char c)
   s[len] = '\0';
 }
 
+int
+_rewind(void *get_next_byte_argument, int offset)
+{
+  return fseek(get_next_byte_argument, offset, SEEK_CUR);
+}
+
 void ignoreWhiteSpace(int (*get_next_byte) (void *),
 		      void *get_next_byte_argument)
 {
@@ -110,7 +131,7 @@ void ignoreWhiteSpace(int (*get_next_byte) (void *),
     ;
   }
   if (c != EOF) {
-    fseek(get_next_byte_argument, -1, SEEK_CUR);
+    _rewind(get_next_byte_argument, -1);
   }
 }
 
@@ -139,6 +160,9 @@ readNextToken(char **t, int *tlen, int (*get_next_byte) (void *),
   while ((c = get_next_byte(get_next_byte_argument)) != EOF) {
     type = getTokenType(c);
     if (type == ALPHANUM) {
+      if (c == '`') {
+	backquote = !backquote;
+      }
       token[len++] = c;
       if (len + 1 == maxLen) {
       	maxLen *= 2;
@@ -148,18 +172,19 @@ readNextToken(char **t, int *tlen, int (*get_next_byte) (void *),
         while ((c = get_next_byte(get_next_byte_argument)) != EOF && c == ' ') {
   	       ;
         }
-        if (getTokenType(c) == ALPHANUM) {
-  	       fseek(get_next_byte_argument, -1, SEEK_CUR);
-        } else if (getTokenType(c) == O_PAR) {
-           fseek(get_next_byte_argument, -1, SEEK_CUR);
-        } else {
-  	       type = getTokenType(c);
-        }
+	type = getTokenType(c);
+        if (type == ALPHANUM || type == O_PAR ||
+	    type == REDIRECTION1 || type == REDIRECTION2) {
+	  _rewind(get_next_byte_argument, -1);
+	}
         break;
     } else if (type == O_PAR) {
         *t = token;
         *tlen += 1;
         return type;
+    } else if (type == REDIRECTION1 || type == REDIRECTION2) {
+      _rewind(get_next_byte_argument, -1);
+      break;
     } else {
       break;
     }
@@ -176,10 +201,41 @@ readNextToken(char **t, int *tlen, int (*get_next_byte) (void *),
   return type;
 }
 
-void printErr()
+
+int
+fillRedirectionOperands(char **input, char **output,
+			int (*get_next_byte) (void *),
+			void *get_next_byte_argument)
 {
-  fprintf (stderr, "Syntax err at line %d\n", lineNumber);
-  exit(-1);
+  int len = 0;
+
+  while (1) {
+    len = 0;
+    switch (getTokenType(get_next_byte(get_next_byte_argument))) {
+    case REDIRECTION1:
+      readNextToken(input, &len, get_next_byte,
+		    get_next_byte_argument);
+      if (!(*input)) {
+	goto err;
+      }
+      break;
+    case REDIRECTION2:
+      readNextToken(output, &len, get_next_byte,
+		    get_next_byte_argument);
+      if (!(*output)) {
+	goto err;
+      }
+      break;
+    default:
+      _rewind(get_next_byte_argument, -1);
+      goto out;
+    }
+  }
+ out:
+  return 0;
+ err:
+  printErr();
+  return -1;
 }
 
 command_stream_t
@@ -205,11 +261,22 @@ AllocateCommand()
 }
 
 command_t
-makeSimpleCommand(command_t command, char **s)
+makeBaseCommand(command_t command, char *input, char *output)
 {
   if (!command) {
     command = AllocateCommand();
   }
+
+  command->input = input;
+  command->output = output;
+
+  return command;
+}
+
+command_t
+makeSimpleCommand(command_t command, char **s, char *input, char *output)
+{
+  command = makeBaseCommand(command, input, output);
 
   command->type = SIMPLE_COMMAND;
   command->u.word = s;
@@ -218,15 +285,14 @@ makeSimpleCommand(command_t command, char **s)
 }
 
 command_t
-makeCommand(command_t command, char **tokenPTR, command_type type)
+makeCommand(command_t command, char **tokenPTR, command_type type,
+	    char *input, char *output)
 {
-  if (!command) {
-    command = AllocateCommand();
-  }
+  command = makeBaseCommand(command, input, output);
 
   command->type = type;
   if (tokenPTR) {
-    command->u.command[0] = makeSimpleCommand(NULL, tokenPTR);
+    command->u.command[0] = makeSimpleCommand(NULL, tokenPTR, NULL, NULL);
   }
 
   return command;
@@ -304,6 +370,7 @@ makeCommandStreamUtil(int (*get_next_byte) (void *),
   int len = 0;
   TOKENTYPE type;
   command_t command = NULL;
+  char *input = NULL, *output = NULL;
 
   type = readNextToken(tokenPTR, &len, get_next_byte, get_next_byte_argument);
   if (type == NOT_DEFINED) {
@@ -344,7 +411,7 @@ makeCommandStreamUtil(int (*get_next_byte) (void *),
     goto ret_null;
   } else if (!strncmp(token, "if", 2)) {
     CScount++;
-    command = makeCommand(command, NULL, IF_COMMAND);
+    command = makeCommand(command, NULL, IF_COMMAND, input, output);
     free(tokenPTR);
     command->u.command[0] = makeCommandStreamUtil(get_next_byte,
 						  get_next_byte_argument,
@@ -376,7 +443,7 @@ makeCommandStreamUtil(int (*get_next_byte) (void *),
     }
   } else if (!strncmp(token, "while", 5)) {
     (CScount)++;
-    command = makeCommand(command, NULL, WHILE_COMMAND);
+    command = makeCommand(command, NULL, WHILE_COMMAND, input, output);
     free(tokenPTR);
     command->u.command[0] = makeCommandStreamUtil(get_next_byte,
 						  get_next_byte_argument,
@@ -400,7 +467,7 @@ makeCommandStreamUtil(int (*get_next_byte) (void *),
     }    
   } else if (!strncmp(token, "until", 5)) {
     (CScount)++;
-    command = makeCommand(command, NULL, UNTIL_COMMAND);
+    command = makeCommand(command, NULL, UNTIL_COMMAND, input, output);
     free(tokenPTR);
     command->u.command[0] = makeCommandStreamUtil(get_next_byte,
 						  get_next_byte_argument,
@@ -425,7 +492,7 @@ makeCommandStreamUtil(int (*get_next_byte) (void *),
 
   } else if (!strncmp(token, "(", 1)) {
     CScount++;
-    command = makeCommand(command, NULL, SUBSHELL_COMMAND);
+    command = makeCommand(command, NULL, SUBSHELL_COMMAND, input, output);
     free(tokenPTR);
     command->u.command[0] =  makeCommandStreamUtil(get_next_byte,
               get_next_byte_argument,
@@ -444,18 +511,27 @@ makeCommandStreamUtil(int (*get_next_byte) (void *),
       STATE prevState = *state;
       if (isKeyWordUpdate(token, state) && (prevState == COMMAND)) {
          	removeWhiteSpace(token);
-        	command = makeSimpleCommand(command, tokenPTR);
+        	command = makeSimpleCommand(command, tokenPTR, input, output);
         	break;
       }
-      if (type == SPACE) {
+      if (type == REDIRECTION1 || type == REDIRECTION2) {
+	fillRedirectionOperands(&input,
+				&output,
+				get_next_byte,
+				get_next_byte_argument);
+
+	command = makeSimpleCommand(command, tokenPTR, input, output);
+        break;
+      } else if (type == SPACE) {
 	appendChar(token, ' ');
 	type = readNextToken(tokenPTR, &len, get_next_byte, get_next_byte_argument);
       } else if (type == NEWLINE && !CScount) {
-      	command = makeSimpleCommand(command, tokenPTR);
+      	command = makeSimpleCommand(command, tokenPTR, input, output);
       	break;
       } else if (type == PIPE || type == SEMICOLON || type == NEWLINE) {
 	command = makeCommand(command, tokenPTR, 
-			      type == PIPE ? PIPE_COMMAND : SEQUENCE_COMMAND);
+			      type == PIPE ? PIPE_COMMAND : SEQUENCE_COMMAND,
+			      input, output);
 	command->u.command[1] = makeCommandStreamUtil(get_next_byte,
 						      get_next_byte_argument,
 						      state);
@@ -492,14 +568,18 @@ make_command_stream (int (*get_next_byte) (void *),
     command_t command = makeCommandStreamUtil(get_next_byte,
 					      get_next_byte_argument,
 					      &state);
-    if (command && !CScount) {
-      cur = AllocateCommandStream();
-      cur->command = command;
-      if (head) {
-	prev->next = cur;
-	prev = cur;
-      } else { // This is the first node
-	head = prev = cur;
+    if (command) {
+      if (!CScount && !backquote) {
+	cur = AllocateCommandStream();
+	cur->command = command;
+	if (head) {
+	  prev->next = cur;
+	  prev = cur;
+	} else { // This is the first node
+	  head = prev = cur;
+	}
+      } else {
+	printErr();
       }
     } else if (CScount) {
       printErr();
