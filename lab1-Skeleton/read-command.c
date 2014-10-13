@@ -194,7 +194,6 @@ readNextToken(char **t, int *tlen, int (*get_next_byte) (void *),
       break;
     }
   }
-
   /* if (len == 0) { */
   /*   *t = NULL; */
   /*   free(token); */
@@ -248,6 +247,30 @@ fillRedirectionOperands(char **input, char **output,
  err:
   printErr();
   return -1;
+}
+
+int
+checkRedirection(int (*get_next_byte) (void *),
+		 void *get_next_byte_argument)
+{
+  char c;
+  int flag = 0;
+
+  while ((c = get_next_byte(get_next_byte_argument)) != EOF && c == ' ') {
+    ;
+  }
+  switch (getTokenType(c)) {
+  case REDIRECTION1:
+  case REDIRECTION2:
+    flag = 1;
+    break;
+  default:
+    flag = 0;
+    break;
+  }
+  _rewind(get_next_byte_argument, -1);
+
+  return flag;
 }
 
 command_stream_t
@@ -470,10 +493,24 @@ makeCommandStreamUtil(int (*get_next_byte) (void *),
     if (*state != DONE) {
       // HANDLE error;
       ;
-    } else if (*state == DONE && CScount) {
+    } else if (*state == DONE) {
+      if (checkRedirection(get_next_byte, get_next_byte_argument)) {
+	fillRedirectionOperands(&command->input, &command->output,
+				get_next_byte, get_next_byte_argument);
+      }
+
       command->u.command[2] = makeCommandStreamUtil(get_next_byte,
-						    get_next_byte_argument,
-						    state);
+      						    get_next_byte_argument,
+      						    state);
+      /* if (command->u.command[2]) { */
+      /* 	command_t newCommand = makeCommand(NULL, NULL, SEQUENCE_COMMAND, */
+      /* 					   NULL, NULL); */
+      /* 	newCommand->u.command[0] = command->u.command[1]; */
+      /* 	newCommand->u.command[1] = command->u.command[2]; */
+      /* 	command->u.command[1] = newCommand; */
+      /* 	command->u.command[2] = NULL; */
+      /* } */
+
     } else {
       command->u.command[2] = NULL;
     }    
@@ -494,11 +531,22 @@ makeCommandStreamUtil(int (*get_next_byte) (void *),
     if (*state != DONE) {
       // HANDLE error;
       ;
-    } else if (*state == DONE && CScount) {
-      
+    } else if (*state == DONE) {
+      if (checkRedirection(get_next_byte, get_next_byte_argument)) {
+	fillRedirectionOperands(&command->input, &command->output,
+				get_next_byte, get_next_byte_argument);
+      }
       command->u.command[2] = makeCommandStreamUtil(get_next_byte,
-						    get_next_byte_argument,
-						    state);
+      						    get_next_byte_argument,
+      						    state);
+      /* if (command->u.command[2]) { */
+      /* 	command_t newCommand = makeCommand(NULL, NULL, SEQUENCE_COMMAND, */
+      /* 					   NULL, NULL); */
+      /* 	newCommand->u.command[0] = command->u.command[1]; */
+      /* 	newCommand->u.command[1] = command->u.command[2]; */
+      /* 	command->u.command[1] = newCommand; */
+      /* 	command->u.command[2] = NULL; */
+      /* } */
     } else {
       command->u.command[2] = NULL;
     }    
@@ -516,8 +564,7 @@ makeCommandStreamUtil(int (*get_next_byte) (void *),
       command->u.command[0] = makeCommandStreamUtil(get_next_byte,
                 get_next_byte_argument,
                 state);
-    }
-
+    } 
   } else {
     // SIMPLE_COMMAND
     while (1) {
