@@ -37,26 +37,30 @@ enum TOKENTYPE {
   C_PAR
 };
 
-static const char *string[] = {"NOT_DEFINED", "SEMICOLON", "PIPE", "SPACE",
-			       "NEWLINE", "ALPHANUM"};
+int lineNumber = 0;
+int CScount;
+
+/* static const char *string[] = {"NOT_DEFINED", "SEMICOLON", "PIPE", "SPACE", */
+/* 			       "NEWLINE", "ALPHANUM"}; */
 
 typedef struct KeyWords {
   char *keyword;
   STATE state;
+  int CSContribution;
 } KeyWords;
 
 KeyWords keywords[] = {
-  {"if", IF},
-  {"then", THEN},
-  {"else", ELSE},
-  {"fi", FI},
-  {"while", WHILE},
-  {"do", DO},
-  {"done", DONE},
-  {"until", UNTIL},
-  {"(", OPEN_PAR},
-  {")", CLOSE_PAR},
-  {NULL, INVALID},
+  {"if", IF, 1},
+  {"then", THEN, 0},
+  {"else", ELSE, 0},
+  {"fi", FI, -1},
+  {"while", WHILE, 1},
+  {"do", DO, 0},
+  {"done", DONE, -1},
+  {"until", UNTIL, 1},
+  {"(", OPEN_PAR, 1},
+  {")", CLOSE_PAR, -1},
+  {NULL, INVALID, 0},
 };
 
 TOKENTYPE getTokenType(char c)
@@ -172,6 +176,12 @@ readNextToken(char **t, int *tlen, int (*get_next_byte) (void *),
   return type;
 }
 
+void printErr()
+{
+  fprintf (stderr, "Syntax err at line %d\n", lineNumber);
+  exit(-1);
+}
+
 command_stream_t
 AllocateCommandStream()
 {
@@ -264,6 +274,7 @@ isKeyWordUpdate(char *token, STATE *state)
     if (!strrcmp(token, keywords[i].keyword)) {
       token[strlen(token) - strlen(keywords[i].keyword)] = '\0';
       *state = keywords[i].state;
+      CScount += keywords[i].CSContribution;
       flag = 1;
       break;
     }
@@ -286,11 +297,10 @@ void removeWhiteSpace(char *token)
 command_t
 makeCommandStreamUtil(int (*get_next_byte) (void *),
 		      void *get_next_byte_argument,
-		      STATE *state, int *CScount)
+		      STATE *state)
 {
   char **tokenPTR = checked_malloc(sizeof(char**));
   char *token = NULL;
-  char *nextToken;
   int len = 0;
   TOKENTYPE type;
   command_t command = NULL;
@@ -316,7 +326,7 @@ makeCommandStreamUtil(int (*get_next_byte) (void *),
     goto ret_null;
   } else if (!strncmp(token, "done", 4)) {
     *state = DONE;
-    (*CScount)--;
+    CScount--;
     goto ret_null;
   } else if (!strncmp(token, "do", 4)) {
     *state = DO;
@@ -325,99 +335,107 @@ makeCommandStreamUtil(int (*get_next_byte) (void *),
     *state = ELSE;
     goto ret_null;
   } else if (!strncmp(token, "fi", 4)) {
-    (*CScount)--;
+    CScount--;
     *state = FI;
     goto ret_null;
   } else if (!strncmp(token, ")", 1)) {
-    (*CScount) --;
+    CScount--;
     *state = CLOSE_PAR;
     goto ret_null;
   } else if (!strncmp(token, "if", 2)) {
-    (*CScount)++;
+    CScount++;
     command = makeCommand(command, NULL, IF_COMMAND);
     free(tokenPTR);
     command->u.command[0] = makeCommandStreamUtil(get_next_byte,
 						  get_next_byte_argument,
-						  state, CScount);
+						  state);
     while (*state != THEN) {
-      makeCommandStreamUtil(get_next_byte,
-			    get_next_byte_argument,
-			    state, CScount);
+      if (!makeCommandStreamUtil(get_next_byte,
+				 get_next_byte_argument,
+				 state)) {
+	type = NOT_DEFINED;
+	break;
+      }
+    }
+
+    if (type == NOT_DEFINED && *state != THEN) {
+      return NULL;
     }
     command->u.command[1] = makeCommandStreamUtil(get_next_byte,
 						  get_next_byte_argument,
-						  state, CScount);
+						  state);
     if (*state != ELSE && *state != FI) {
       // HANDLE error;
       ;
-    } else if (*state == ELSE || (*state == FI && *CScount)) {
+    } else if (*state == ELSE || (*state == FI && CScount)) {
 	command->u.command[2] = makeCommandStreamUtil(get_next_byte,
 						      get_next_byte_argument,
-						      state, CScount);
+						      state);
     } else {
       command->u.command[2] = NULL;
     }
   } else if (!strncmp(token, "while", 5)) {
-    (*CScount)++;
+    (CScount)++;
     command = makeCommand(command, NULL, WHILE_COMMAND);
     free(tokenPTR);
     command->u.command[0] = makeCommandStreamUtil(get_next_byte,
 						  get_next_byte_argument,
-						  state, CScount);
+						  state);
     if (*state != DO) {
       // Handle Error
       ;
     }
     command->u.command[1] = makeCommandStreamUtil(get_next_byte,
 						  get_next_byte_argument,
-						  state, CScount);
+						  state);
     if (*state != DONE) {
       // HANDLE error;
       ;
-    } else if (*state == DONE && *CScount) {
+    } else if (*state == DONE && CScount) {
       command->u.command[2] = makeCommandStreamUtil(get_next_byte,
 						    get_next_byte_argument,
-						    state, CScount);
+						    state);
     } else {
       command->u.command[2] = NULL;
     }    
   } else if (!strncmp(token, "until", 5)) {
-    (*CScount)++;
+    (CScount)++;
     command = makeCommand(command, NULL, UNTIL_COMMAND);
     free(tokenPTR);
     command->u.command[0] = makeCommandStreamUtil(get_next_byte,
 						  get_next_byte_argument,
-						  state, CScount);
+						  state);
     if (*state != DO) {
       // Handle Error
       ;
     }
     command->u.command[1] = makeCommandStreamUtil(get_next_byte,
 						  get_next_byte_argument,
-						  state, CScount);
+						  state);
     if (*state != DONE) {
       // HANDLE error;
       ;
-    } else if (*state == DONE && *CScount) {
+    } else if (*state == DONE && CScount) {
       command->u.command[2] = makeCommandStreamUtil(get_next_byte,
 						    get_next_byte_argument,
-						    state, CScount);
+						    state);
     } else {
       command->u.command[2] = NULL;
     }    
 
   } else if (!strncmp(token, "(", 1)) {
+    CScount++;
     command = makeCommand(command, NULL, SUBSHELL_COMMAND);
     free(tokenPTR);
     command->u.command[0] =  makeCommandStreamUtil(get_next_byte,
               get_next_byte_argument,
-              state, CScount);
+              state);
     if (*state != CLOSE_PAR) {
       // Handle Error
-    } else if (*state == CLOSE_PAR && *CScount) {
+    } else if (*state == CLOSE_PAR && CScount) {
       command->u.command[0] = makeCommandStreamUtil(get_next_byte,
                 get_next_byte_argument,
-                state, CScount);
+                state);
     }
 
   } else {
@@ -432,7 +450,7 @@ makeCommandStreamUtil(int (*get_next_byte) (void *),
       if (type == SPACE) {
 	appendChar(token, ' ');
 	type = readNextToken(tokenPTR, &len, get_next_byte, get_next_byte_argument);
-      } else if (type == NEWLINE && !(*CScount)) {
+      } else if (type == NEWLINE && !CScount) {
       	command = makeSimpleCommand(command, tokenPTR);
       	break;
       } else if (type == PIPE || type == SEMICOLON || type == NEWLINE) {
@@ -440,7 +458,7 @@ makeCommandStreamUtil(int (*get_next_byte) (void *),
 			      type == PIPE ? PIPE_COMMAND : SEQUENCE_COMMAND);
 	command->u.command[1] = makeCommandStreamUtil(get_next_byte,
 						      get_next_byte_argument,
-						      state, CScount);
+						      state);
 	if (!command->u.command[1]) {
 	  command = convertToSimple(command);
 	}
@@ -466,15 +484,15 @@ make_command_stream (int (*get_next_byte) (void *),
   command_stream_t prev = NULL;
   command_stream_t cur  = NULL;
   STATE state;
-  int CScount = 0; // Control Statement count
 
   while (1) {
     state = INVALID;
     CScount = 0;
+    lineNumber++;
     command_t command = makeCommandStreamUtil(get_next_byte,
 					      get_next_byte_argument,
-					      &state, &CScount);
-    if (command) {
+					      &state);
+    if (command && !CScount) {
       cur = AllocateCommandStream();
       cur->command = command;
       if (head) {
@@ -483,6 +501,8 @@ make_command_stream (int (*get_next_byte) (void *),
       } else { // This is the first node
 	head = prev = cur;
       }
+    } else if (CScount) {
+      printErr();
     } else {
       break;
     }
