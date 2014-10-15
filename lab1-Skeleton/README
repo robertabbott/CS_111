@@ -1,4 +1,15 @@
-This is a skeleton for CS 111 Lab 1.
+CS 111 Lab 1A
 
-Replace this README file with notes on your implementation.
-Mentions any special features or limitations.
+
+Robert Abbott 004432123
+Mohammed Junaid Ahmed 104-293-008
+
+Implementation Details:
+The main method in our implementation is make_command_stream. This creates a linked list of command nodes. Each nodes is a complete command.
+
+The complete command placed in each node is generated with a call to the makeCommandStreamUtil method. Breaks the command into tokens and fills the command_t structure recursively. The recursive structure of makeCommandStreamUtil enables parsing subcommands to be stored in the command array of its super command. 
+
+Tokens are generated using ReadNextToken helper function which continues through the stream until it finds a delimiter such as ";", " ", "\n", "(" etc. ReadNextToken then returns both the token and the delimiters. 
+
+Limitations:
+The current implementation fails to raise errors for some of the ill-formed commands. To handle this a stack was implemented to track which commands occurred. By popping old commands when the next command in a sequence occurred and checking that closing commands occur (such as done, fi) the stack would ensure that ill-formed commands are detected. However the stack implementation currently breaks other components and is therefore left out of this submission.
