@@ -591,6 +591,9 @@ makeCommandStreamUtil(int (*get_next_byte) (void *),
       	break;
       } else if (type == PIPE || type == SEMICOLON || type == NEWLINE) {
 	removeWhiteSpace(token);
+	if (((type == PIPE) || (type == SEMICOLON)) && !strlen(token)) {
+	  printErr();
+	}
 	command = makeCommand(command, tokenPTR, 
 			      type == PIPE ? PIPE_COMMAND : SEQUENCE_COMMAND,
 			      input, output);
