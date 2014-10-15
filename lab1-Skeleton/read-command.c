@@ -221,14 +221,14 @@ fillRedirectionOperands(char **input, char **output,
     case REDIRECTION1:
       type = readNextToken(input, &len, get_next_byte,
 			   get_next_byte_argument);
-      if (!(*input)) {
+      if (!(*input) || !strlen(*input)) {
 	goto err;
       }
       break;
     case REDIRECTION2:
       type = readNextToken(output, &len, get_next_byte,
 			   get_next_byte_argument);
-      if (!(*output)) {
+      if (!(*output) || !strlen(*output)) {
 	goto err;
       }
       break;
