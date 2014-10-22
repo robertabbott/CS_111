@@ -18,6 +18,8 @@
 #include "command.h"
 #include "command-internals.h"
 
+#include <string.h>
+#include <unistd.h>
 #include <error.h>
 
 /* FIXME: You may need to add #include directives, macro definitions,
@@ -39,9 +41,74 @@ command_status (command_t c)
   return c->status;
 }
 
+char** tokenize_command(char *tokenArr)
+{
+        int i = 0, len = strlen(tokenArr);
+        int wdcount = 1;
+        char **tokenArrPtr;
+
+        while (i < len) {
+                if (tokenArr[i] == ' ') {
+                        wdcount++;
+                }
+                i++;
+        }
+
+        tokenArrPtr = malloc(sizeof(char *) * (wdcount + 1));
+        for (i = 0; i <= wdcount; i++) {
+                char *token = strtok(tokenArr, " ");
+                if (token) {
+                        tokenArrPtr[i] = malloc(strlen(token) + 1);
+                        strcpy(tokenArrPtr[i], token);
+                } else {
+                        tokenArrPtr[i] = NULL;
+                        break;
+                }
+                tokenArr = NULL;
+        }
+	return tokenArrPtr;
+}
+
+void
+execute_simple_command(command_t c)
+{
+	pid_t pid = fork();
+
+	if (pid == -1) {
+		return;
+	} else if (pid == 0) {
+		char **tokenArrptr = tokenize_command(*(c->u.word));
+		execvp(tokenArrptr[0], tokenArrptr);
+	} else {
+		int status;
+		pid_t child_pid = waitpid(pid, status, 0);
+	}
+}
+
 void
 execute_command (command_t c, int profiling)
 {
-  /* FIXME: Replace this with your implementation, like 'prepare_profiling'.  */
-  error (1, 0, "command execution not yet implemented %p %d", c, profiling);
+	if (!c) {
+		return;
+	}
+
+	switch(c->type) {
+	case IF_COMMAND:
+		break;
+	case PIPE_COMMAND:
+		break;
+	case SEQUENCE_COMMAND:
+		break;
+	case SIMPLE_COMMAND:
+		execute_simple_command(c);
+		break;
+	case SUBSHELL_COMMAND:
+		break;
+	case UNTIL_COMMAND:
+		break;
+	case WHILE_COMMAND:
+		break;
+	default:
+		error(0, 0, "Invalid command type %d\n", c->type);
+	}
 }
