@@ -18,6 +18,9 @@
 #include "command.h"
 #include "command-internals.h"
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <string.h>
 #include <unistd.h>
 #include <error.h>
@@ -78,10 +81,22 @@ execute_simple_command(command_t c)
 		return;
 	} else if (pid == 0) {
 		char **tokenArrptr = tokenize_command(*(c->u.word));
+		if (c->input) {
+			int inFD;
+			inFD = open(c->input, O_RDONLY);
+			dup2(inFD, STDIN_FILENO);
+			close(inFD);
+		}
+		if (c->output) {
+			int outFD;
+			outFD = open(c->input, O_WRONLY);
+			dup2(outFD, STDOUT_FILENO);
+			close(outFD);
+		}
 		execvp(tokenArrptr[0], tokenArrptr);
 	} else {
 		int status;
-		pid_t child_pid = waitpid(pid, status, 0);
+		pid_t child_pid = waitpid(pid, &status, 0);
 	}
 }
 
