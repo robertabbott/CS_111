@@ -73,7 +73,7 @@ char** tokenize_command(char *tokenArr)
 }
 
 void
-execute_simple_command(command_t c)
+execute_simple_command(command_t c, int profiling)
 {
 	pid_t pid = fork();
 
@@ -84,14 +84,22 @@ execute_simple_command(command_t c)
 		if (c->input) {
 			int inFD;
 			inFD = open(c->input, O_RDONLY);
-			dup2(inFD, STDIN_FILENO);
-			close(inFD);
+			if (inFD == -1) {
+				perror("open input file: ");
+			} else {
+				dup2(inFD, STDIN_FILENO);
+				close(inFD);
+			}
 		}
 		if (c->output) {
 			int outFD;
-			outFD = open(c->input, O_WRONLY);
-			dup2(outFD, STDOUT_FILENO);
-			close(outFD);
+			outFD = open(c->output, O_WRONLY | O_CREAT | O_TRUNC);
+			if (outFD == -1) {
+				perror("open output file: %s", c->output);
+			} else {
+				dup2(outFD, STDOUT_FILENO);
+				close(outFD);
+			}
 		}
 		execvp(tokenArrptr[0], tokenArrptr);
 	} else {
@@ -115,7 +123,7 @@ execute_command (command_t c, int profiling)
 	case SEQUENCE_COMMAND:
 		break;
 	case SIMPLE_COMMAND:
-		execute_simple_command(c);
+		execute_simple_command(c, profiling);
 		break;
 	case SUBSHELL_COMMAND:
 		break;
