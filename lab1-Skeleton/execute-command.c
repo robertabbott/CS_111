@@ -108,6 +108,20 @@ execute_simple_command(command_t c, int profiling)
 	}
 }
 
+int execute_subshell(command_t c, int profiling) {
+	pid_t pid = fork();
+	if (pid < 0) {
+		return;
+	} else if (pid == 0) {
+		execute_command(c->u.command[0], profiling);
+		execute_command(c->u.command[1], profiling);
+	} else {
+		int status;
+		waitpid(pid, &status, 0);	
+		return status;
+	}
+}
+
 int execute_pipe(command_t c, int profiling) {
 	pid_t child1;
 	pid_t child2;
@@ -177,6 +191,7 @@ execute_command (command_t c, int profiling)
 		execute_simple_command(c, profiling);
 		break;
 	case SUBSHELL_COMMAND:
+		execute_subshell(c, profiling);
 		break;
 	case UNTIL_COMMAND:
 		break;
