@@ -100,6 +100,20 @@ execute_simple_command(command_t c)
 	}
 }
 
+void execute_sequence(command_t c, int profiling) {
+	pid_t pid = fork();
+	if (pid < 0) {
+		return;
+	} else if (pid == 0) {
+		execute_command(c->u.command[0], profiling);
+		execute_command(c->u.command[1], profiling);
+	} else {
+		int status;
+		waitpid(pid, &status, 0);
+		c->status = status;
+	}
+}
+
 void
 execute_command (command_t c, int profiling)
 {
@@ -113,6 +127,7 @@ execute_command (command_t c, int profiling)
 	case PIPE_COMMAND:
 		break;
 	case SEQUENCE_COMMAND:
+		execute_sequence(c, profiling);
 		break;
 	case SIMPLE_COMMAND:
 		execute_simple_command(c);
