@@ -44,7 +44,8 @@ command_status (command_t c)
   return c->status;
 }
 
-char** tokenize_command(char *tokenArr)
+char**
+tokenize_command(char *tokenArr)
 {
         int i = 0, len = strlen(tokenArr);
         int wdcount = 1;
@@ -103,23 +104,21 @@ execute_simple_command(command_t c, int profiling)
 		}
 		execvp(tokenArrptr[0], tokenArrptr);
 	} else {
-		int status;
-		pid_t child_pid = waitpid(pid, &status, 0);
+		pid_t child_pid = waitpid(pid, &c->status, 0);
 	}
 }
 
 int execute_subshell(command_t c, int profiling) {
 	pid_t pid = fork();
 	if (pid < 0) {
-		return;
+		return -1;
 	} else if (pid == 0) {
 		execute_command(c->u.command[0], profiling);
 		execute_command(c->u.command[1], profiling);
 	} else {
-		int status;
-		waitpid(pid, &status, 0);	
-		return status;
+		waitpid(pid, &c->status, 0);
 	}
+	return c->status;
 }
 
 int execute_pipe(command_t c, int profiling) {
