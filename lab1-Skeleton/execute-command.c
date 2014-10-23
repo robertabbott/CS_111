@@ -108,7 +108,42 @@ execute_simple_command(command_t c, int profiling)
 	}
 }
 
-void execute_sequence(command_t c, int profiling) {
+int execute_pipe(command_t c, int profiling) {
+	pid_t child1;
+	pid_t child2;
+
+	child1 = fork();
+	if (child1 < 0) {
+		return -1;
+	} else if (child1 == 0) {
+		int pipefd[2];
+		if (pipe(pipefd)) {
+			// error
+			return -1;
+		}
+		child2 = fork();
+		if (child2 < 0) {
+			return -1;
+		} else if (child2 == 0) {
+			dup2(pipefd[1], STDOUT_FILENO);
+			close(pipefd[0]);
+			close(pipefd[1]);	
+			execute_command(c->u.command[0], profiling);
+		} else {
+			dup2(pipefd[0], STDIN_FILENO);
+			close(pipefd[0]);
+			close(pipefd[1]);
+			execute_command(c->u.command[1], profiling);
+		}
+	} else {
+		int status;
+		waitpid(child1, &status, 0);
+		return status;
+	}
+}
+			
+
+int execute_sequence(command_t c, int profiling) {
 	pid_t pid = fork();
 	if (pid < 0) {
 		return;
@@ -118,7 +153,7 @@ void execute_sequence(command_t c, int profiling) {
 	} else {
 		int status;
 		waitpid(pid, &status, 0);
-		c->status = status;
+		return status;
 	}
 }
 
@@ -133,6 +168,7 @@ execute_command (command_t c, int profiling)
 	case IF_COMMAND:
 		break;
 	case PIPE_COMMAND:
+		execute_pipe(c, profiling);
 		break;
 	case SEQUENCE_COMMAND:
 		execute_sequence(c, profiling);
