@@ -152,8 +152,8 @@ int execute_sequence(command_t c, int profiling)
 	}
 }
 
-int
-execute_ifcommand(command_t c, int profiling)
+static int
+execute_if_command(command_t c, int profiling)
 {
 	pid_t pid = fork();
 	if (!pid) {
@@ -171,6 +171,35 @@ execute_ifcommand(command_t c, int profiling)
 }
 
 static int
+execute_while_command(command_t c, int profiling)
+{
+	while (1) {
+		pid_t pid = fork();
+		if (!pid) {
+			command_switch(c->u.command[0], profiling);
+		} else {
+			int status;
+			waitpid(pid, &status, 0);
+			if (status) {
+				break;
+			} else {
+				pid = fork();
+				if (!pid) {
+					command_switch(c->u.command[1], profiling);
+				} else {
+					waitpid(pid, &c->status, 0);
+				}
+			}
+		}
+	}
+	if (c->u.command[2]) {
+		command_switch(c->u.command[2], profiling);
+	}
+
+	_exit(c->status);
+}
+
+static int
 command_switch(command_t c, int profiling)
 {
 	if (!c) {
@@ -178,7 +207,7 @@ command_switch(command_t c, int profiling)
 	}
 	switch(c->type) {
 	case IF_COMMAND:
-		execute_ifcommand(c, profiling);
+		execute_if_command(c, profiling);
 		break;
 	case PIPE_COMMAND:
 		execute_pipe(c, profiling);
@@ -195,6 +224,7 @@ command_switch(command_t c, int profiling)
 	case UNTIL_COMMAND:
 		break;
 	case WHILE_COMMAND:
+		execute_while_command(c, profiling);
 		break;
 	default:
 		error(0, 0, "Invalid command type %d\n", c->type);
