@@ -106,10 +106,7 @@ execute_simple_command(command_t c, int profiling)
 int
 execute_subshell(command_t c, int profiling)
 {
-	execute_command(c->u.command[0], profiling);
-	execute_command(c->u.command[1], profiling);
-	c->status = c->u.command[1]->status;
-	return c->status;
+	command_switch(c->u.command[0], profiling);
 }
 
 int
