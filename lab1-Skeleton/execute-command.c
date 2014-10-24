@@ -76,107 +76,85 @@ tokenize_command(char *tokenArr)
 void
 execute_simple_command(command_t c, int profiling)
 {
-	pid_t pid = fork();
-
-	if (pid == -1) {
-		return;
-	} else if (pid == 0) {
-		char **tokenArrptr = tokenize_command(*(c->u.word));
-		if (c->input) {
-			int inFD;
-			inFD = open(c->input, O_RDONLY);
-			if (inFD == -1) {
-				perror("open input file: ");
-			} else {
-				dup2(inFD, STDIN_FILENO);
-				close(inFD);
+	char **tokenArrptr = tokenize_command(*(c->u.word));
+	if (c->input) {
+		int inFD;
+		inFD = open(c->input, O_RDONLY);
+		if (inFD == -1) {
+			perror("open input file: ");
+		} else {
+			dup2(inFD, STDIN_FILENO);
+			close(inFD);
 			}
-		}
-		if (c->output) {
-			int outFD;
-			outFD = open(c->output, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-			if (outFD == -1) {
-				perror("open output file: %s", c->output);
-			} else {
-				dup2(outFD, STDOUT_FILENO);
-				close(outFD);
-			}
-		}
-		execvp(tokenArrptr[0], tokenArrptr);
-	} else {
-		pid_t child_pid = waitpid(pid, &c->status, 0);
 	}
+	if (c->output) {
+		int outFD;
+		outFD = open(c->output, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+		if (outFD == -1) {
+			perror("open output file: %s", c->output);
+		} else {
+			dup2(outFD, STDOUT_FILENO);
+			close(outFD);
+		}
+	}
+	execvp(tokenArrptr[0], tokenArrptr);
 }
 
-int execute_subshell(command_t c, int profiling) {
-	pid_t pid = fork();
-	if (pid < 0) {
-		return -1;
-	} else if (pid == 0) {
-		execute_command(c->u.command[0], profiling);
-		execute_command(c->u.command[1], profiling);
-	} else {
-		waitpid(pid, &c->status, 0);
-	}
+int
+execute_subshell(command_t c, int profiling)
+{
+	execute_command(c->u.command[0], profiling);
+	execute_command(c->u.command[1], profiling);
+	c->status = c->u.command[1]->status;
 	return c->status;
 }
 
-int execute_pipe(command_t c, int profiling) {
-	pid_t child1;
-	pid_t child2;
+int
+execute_pipe(command_t c, int profiling)
+{
+	pid_t pid;
 
-	child1 = fork();
-	if (child1 < 0) {
+	int pipefd[2];
+	if (pipe(pipefd)) {
+		// error
 		return -1;
-	} else if (child1 == 0) {
-		int pipefd[2];
-		if (pipe(pipefd)) {
-			// error
-			return -1;
-		}
-		child2 = fork();
-		if (child2 < 0) {
-			return -1;
-		} else if (child2 == 0) {
-			dup2(pipefd[1], STDOUT_FILENO);
-			close(pipefd[0]);
-			close(pipefd[1]);	
-			execute_command(c->u.command[0], profiling);
-		} else {
-			dup2(pipefd[0], STDIN_FILENO);
-			close(pipefd[0]);
-			close(pipefd[1]);
-			execute_command(c->u.command[1], profiling);
-		}
-	} else {
-		int status;
-		waitpid(child1, &status, 0);
-		return status;
 	}
-}
-			
-
-int execute_sequence(command_t c, int profiling) {
-	pid_t pid = fork();
+	pid = fork();
 	if (pid < 0) {
-		return;
+		return -1;
 	} else if (pid == 0) {
-		execute_command(c->u.command[0], profiling);
-		execute_command(c->u.command[1], profiling);
+		dup2(pipefd[1], STDOUT_FILENO);
+		close(pipefd[0]);
+		close(pipefd[1]);	
+		command_switch(c->u.command[0], profiling);
 	} else {
-		int status;
-		waitpid(pid, &status, 0);
-		return status;
+		dup2(pipefd[0], STDIN_FILENO);
+		close(pipefd[0]);
+		close(pipefd[1]);
+		command_switch(c->u.command[1], profiling);
 	}
 }
 
-void
-execute_command (command_t c, int profiling)
+int execute_sequence(command_t c, int profiling)
+{
+	pid_t pid = fork();
+
+	if (pid < 0) {
+		return -1;
+	} else if (!pid) {
+		command_switch(c->u.command[0], profiling);
+	} else {
+		waitpid(pid, NULL, 0);
+		command_switch(c->u.command[1], profiling);
+	}
+}
+
+int
+command_switch(command_t c, int profiling)
 {
 	if (!c) {
-		return;
+		return -1;
 	}
-
 	switch(c->type) {
 	case IF_COMMAND:
 		break;
@@ -198,5 +176,23 @@ execute_command (command_t c, int profiling)
 		break;
 	default:
 		error(0, 0, "Invalid command type %d\n", c->type);
+	}
+}
+
+void
+execute_command (command_t c, int profiling)
+{
+	pid_t pid;
+
+	if (!c) {
+		return;
+	}
+	pid = fork();
+	if (pid < 0) {
+		return;
+	} else if (pid == 0) {
+		command_switch(c, profiling);
+	} else {
+		waitpid(pid, NULL, 0);
 	}
 }
