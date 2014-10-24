@@ -28,6 +28,9 @@
 /* FIXME: You may need to add #include directives, macro definitions,
    static function definitions, etc.  */
 
+static int
+command_switch(command_t c, int profiling);
+
 int
 prepare_profiling (char const *name)
 {
@@ -150,6 +153,24 @@ int execute_sequence(command_t c, int profiling)
 }
 
 int
+execute_ifcommand(command_t c, int profiling)
+{
+	pid_t pid = fork();
+	if (!pid) {
+		command_switch(c->u.command[0], profiling);
+	} else {
+		int status;
+		waitpid(pid, &status, 0);
+		if (!status) {
+			command_switch(c->u.command[1], profiling);
+		} else if (c->u.command[2]) {
+			command_switch(c->u.command[2], profiling);
+		}
+	}
+	_exit(c->status);
+}
+
+static int
 command_switch(command_t c, int profiling)
 {
 	if (!c) {
@@ -157,6 +178,7 @@ command_switch(command_t c, int profiling)
 	}
 	switch(c->type) {
 	case IF_COMMAND:
+		execute_ifcommand(c, profiling);
 		break;
 	case PIPE_COMMAND:
 		execute_pipe(c, profiling);
