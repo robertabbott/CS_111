@@ -170,6 +170,33 @@ execute_if_command(command_t c, int profiling)
 	_exit(c->status);
 }
 
+execute_until_command(command_t c, int profiling) {
+	while (1) {
+		pid_t pid = fork();
+		if (!pid) {
+			command_switch(c->u.command[0], profiling);
+		} else {
+			int status;
+			waitpid(pid, &status, 0);
+			if (!status) {
+				break;
+			} else {
+				pid = fork();
+				if (!pid) {
+					command_switch(c->u.command[1], profiling);
+				} else {
+					waitpid(pid, &c->status, 0);
+				}
+			}
+		}
+	}
+	if (c->u.command[2]) {
+		command_switch(c->u.command[2], profiling);
+	}
+
+	_exit(c->status);
+}
+
 static int
 execute_while_command(command_t c, int profiling)
 {
@@ -222,6 +249,7 @@ command_switch(command_t c, int profiling)
 		execute_subshell(c, profiling);
 		break;
 	case UNTIL_COMMAND:
+		execute_until_command(c, profiling);
 		break;
 	case WHILE_COMMAND:
 		execute_while_command(c, profiling);
