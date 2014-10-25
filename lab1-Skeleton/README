@@ -1,15 +1,29 @@
-CS 111 Lab 1A
+CS 111 Lab 1A/B
 
 
 Robert Abbott 004432123
 Mohammed Junaid Ahmed 104-293-008
 
-Implementation Details:
+Lab 1A Implementation Details:
 The main method in our implementation is make_command_stream. This creates a linked list of command nodes. Each nodes is a complete command.
 
-The complete command placed in each node is generated with a call to the makeCommandStreamUtil method. Breaks the command into tokens and fills the command_t structure recursively. The recursive structure of makeCommandStreamUtil enables parsing subcommands to be stored in the command array of its super command. 
+The complete command placed in each node is generated with a call to the makeCommandStreamUtil method. Breaks the command into tokens and fills the command_t structure recursively. The recursive structure of makeCommandStreamUtil enables parsing subcommands to be stored in the command array of its super command.
 
-Tokens are generated using ReadNextToken helper function which continues through the stream until it finds a delimiter such as ";", " ", "\n", "(" etc. ReadNextToken then returns both the token and the delimiters. 
+Tokens are generated using ReadNextToken helper function which continues through the stream until it finds a delimiter such as ";", " ", "\n", "(" etc. ReadNextToken then returns both the token and the delimiters.
 
 Limitations:
 The current implementation fails to raise errors for some of the ill-formed commands. To handle this a stack is implemented to track which commands occurred. By popping old commands when the next command in a sequence occurred and checking that closing commands occur (such as done, fi) the stack would ensure that ill-formed commands are detected. The stack code needs to be enchanced to handle the cases for example - if then a; fi. It fails to see that between if and then, there was no command.
+
+
+Lab 1B Implementation Details:
+The main method in the implementation of lab 1B is execute_command. If a non-null command is passed to execute_command, it forks
+and makes a call to command_switch. The parents process waits while the command is executed. command_switch checks the type of the
+command and calls the helper function that corresponds to that command type.
+
+Each command type is given its own helper function. Any time a command helper needs to execute a subcommand it makes a call to
+switch_command and passes the subcommand.
+
+Another helper, tokenize_command, is used by simple command to split the command->u such that it can be passed to execvp and execute
+the proper unix command.
+
+There are no known limitations to this implementation of lab 1B
