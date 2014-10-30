@@ -22,7 +22,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "command.h"
-
+#include <sys/types.h>
+#include <unistd.h>
 static char const *program_name;
 static char const *script_name;
 

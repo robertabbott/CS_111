@@ -25,8 +25,7 @@
 #include <unistd.h>
 #include <error.h>
 
-/* FIXME: You may need to add #include directives, macro definitions,
-   static function definitions, etc.  */
+char buf[BUFSIZE];
 
 static int
 command_switch(command_t c, int profiling);
@@ -94,7 +93,7 @@ execute_simple_command(command_t c, int profiling)
 		int outFD;
 		outFD = open(c->output, O_WRONLY | O_CREAT | O_TRUNC, 0644);
 		if (outFD == -1) {
-			perror("open output file: %s", c->output);
+			perror("open output file: ");
 		} else {
 			dup2(outFD, STDOUT_FILENO);
 			close(outFD);
@@ -167,7 +166,8 @@ execute_if_command(command_t c, int profiling)
 	_exit(c->status);
 }
 
-execute_until_command(command_t c, int profiling) {
+execute_until_command(command_t c, int profiling)
+{
 	while (1) {
 		pid_t pid = fork();
 		if (!pid) {
@@ -264,6 +264,10 @@ execute_command (command_t c, int profiling)
 	if (!c) {
 		return;
 	}
+	buf[0] = '\0';
+	construct_command(c, buf);
+	fprintf(stdout, "buf: %s\n", buf);
+
 	pid = fork();
 	if (pid < 0) {
 		return;
