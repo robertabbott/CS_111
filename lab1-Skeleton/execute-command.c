@@ -95,7 +95,7 @@ log_command(command_t c, int profiling,
 			timeBuf[--len] = '\0';
 		} 
 	} else {
-		len = snprintf(timeBuf, BUFSIZE, "%d", getpid());
+		len = snprintf(timeBuf, BUFSIZE, "[%d]", getpid());
 	}
 	write(profiling, timeBuf, len);//strlen(timeBuf));
 	write(profiling, "\n", 1);
