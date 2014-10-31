@@ -173,7 +173,10 @@ execute_subshell(command_t c, int profiling)
 int
 execute_pipe(command_t c, int profiling)
 {
-	pid_t pid;
+	struct timespec start, end;
+	int pid;
+
+	clock_gettime(CLOCK_MONOTONIC, &start);
 
 	int pipefd[2];
 	if (pipe(pipefd)) {
@@ -192,7 +195,19 @@ execute_pipe(command_t c, int profiling)
 		dup2(pipefd[0], STDIN_FILENO);
 		close(pipefd[0]);
 		close(pipefd[1]);
-		command_switch(c->u.command[1], profiling);
+
+		pid = fork();
+		if (pid == -1) {
+			return -1;
+		} else if (pid == 0) {
+			command_switch(c->u.command[1], profiling);
+		} else {
+			int status;
+			waitpid(pid, &status, 0);
+			clock_gettime(CLOCK_MONOTONIC, &end);
+			log_command(c, profiling, start, end);
+			_exit(status);
+		}
 	}
 }
 
@@ -217,15 +232,26 @@ execute_sequence(command_t c, int profiling)
 {
 	int status;
 	struct timespec start, end;
+
+	clock_gettime(CLOCK_MONOTONIC, &start);
+
 	_execute_sequence(c->u.command[0], profiling);
 	status = _execute_sequence(c->u.command[1], profiling);
+
+	clock_gettime(CLOCK_MONOTONIC, &end);
 	log_command(c, profiling, start, end);
+
 	_exit(status);
 }
 
 static int
 execute_if_command(command_t c, int profiling)
 {
+	int status;
+	struct timespec start, end;
+
+	clock_gettime(CLOCK_MONOTONIC, &start);
+
 	pid_t pid = fork();
 	if (!pid) {
 		command_switch(c->u.command[0], profiling);
@@ -238,11 +264,17 @@ execute_if_command(command_t c, int profiling)
 			command_switch(c->u.command[2], profiling);
 		}
 	}
+
+	clock_gettime(CLOCK_MONOTONIC, &end);
+	log_command(c, profiling, start, end);
 	_exit(c->status);
 }
 
 execute_until_command(command_t c, int profiling)
 {
+	int status;
+	struct timespec start, end;
+
 	while (1) {
 		pid_t pid = fork();
 		if (!pid) {
@@ -262,6 +294,8 @@ execute_until_command(command_t c, int profiling)
 			}
 		}
 	}
+	log_command(c, profiling, start, end);
+
 	if (c->u.command[2]) {
 		command_switch(c->u.command[2], profiling);
 	}
