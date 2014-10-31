@@ -215,8 +215,12 @@ _execute_sequence(command_t c, int profiling)
 int
 execute_sequence(command_t c, int profiling)
 {
+	int status;
+	struct timespec start, end;
 	_execute_sequence(c->u.command[0], profiling);
-	_exit(_execute_sequence(c->u.command[1], profiling));
+	status = _execute_sequence(c->u.command[1], profiling);
+	log_command(c, profiling, start, end);
+	_exit(status);
 }
 
 static int
