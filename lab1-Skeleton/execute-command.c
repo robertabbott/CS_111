@@ -160,7 +160,7 @@ execute_simple_command(command_t c, int profiling)
 		waitpid(pid, &status, 0);
 		clock_gettime(CLOCK_MONOTONIC, &end);
 		log_command(c, profiling, start, end);
-		_exit(status);
+		_exit(status ? 1 : 0);
 	}
 }
 
@@ -226,7 +226,7 @@ execute_pipe(command_t c, int profiling)
 }
 
 static int
-_execute_sequence(command_t c, int profiling)
+_execute_command(command_t c, int profiling)
 {
 	pid_t pid = fork();
 
@@ -249,8 +249,8 @@ execute_sequence(command_t c, int profiling)
 
 	clock_gettime(CLOCK_MONOTONIC, &start);
 
-	_execute_sequence(c->u.command[0], profiling);
-	status = _execute_sequence(c->u.command[1], profiling);
+	_execute_command(c->u.command[0], profiling);
+	status = _execute_command(c->u.command[1], profiling);
 
 	clock_gettime(CLOCK_MONOTONIC, &end);
 	log_command(c, profiling, start, end);
@@ -273,9 +273,9 @@ execute_if_command(command_t c, int profiling)
 		int status;
 		waitpid(pid, &status, 0);
 		if (!status) {
-			command_switch(c->u.command[1], profiling);
+			c->status = _execute_command(c->u.command[1], profiling);
 		} else if (c->u.command[2]) {
-			command_switch(c->u.command[2], profiling);
+			c->status = _execute_command(c->u.command[2], profiling);
 		}
 	}
 
@@ -326,7 +326,9 @@ execute_while_command(command_t c, int profiling)
 			command_switch(c->u.command[0], profiling);
 		} else {
 			int status;
-			waitpid(pid, &status, 0);
+			if (waitpid(pid, &status, 0) != pid) {
+				waitpid(pid, &status, 0);
+			}
 			if (status) {
 				break;
 			} else {
