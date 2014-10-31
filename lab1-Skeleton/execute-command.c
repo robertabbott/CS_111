@@ -88,10 +88,18 @@ log_command(command_t c, int profiling,
 
 	// acquire lock
 	write(profiling, timeBuf, len);
-	construct_command(c, timeBuf);
-	write(profiling, timeBuf, strlen(timeBuf));
+	if (c) {
+		construct_command(c, timeBuf);
+		len = strlen(timeBuf);
+		if (timeBuf[len - 1] == ' ') {
+			timeBuf[--len] = '\0';
+		} 
+	} else {
+		len = snprintf(timeBuf, BUFSIZE, "%d", getpid());
+	}
+	write(profiling, timeBuf, len);//strlen(timeBuf));
 	write(profiling, "\n", 1);
-	printf("%s\n", timeBuf);
+	//	printf("%s\n", timeBuf);
 }
 
 char**
@@ -294,7 +302,7 @@ execute_until_command(command_t c, int profiling)
 
  	clock_gettime(CLOCK_MONOTONIC, &start);
 
-	printf("untill: \n");
+	//	printf("untill: \n");
 
 	while (1) {
 		pid_t pid = fork();
@@ -307,7 +315,7 @@ execute_until_command(command_t c, int profiling)
 			if (waitpid(pid, &status, 0) != pid) {
 				waitpid(pid, &status, 0);
 			}
-			printf("untill: status = %d\n", status);
+			//			printf("untill: status = %d\n", status);
 			if (!status) {
 				break;
 			} else {
@@ -408,13 +416,14 @@ void
 execute_command (command_t c, int profiling)
 {
 	pid_t pid;
+	int status;
+	struct timespec start, end;
 
 	if (!c) {
 		return;
 	}
 
-	construct_command(c, buf);
-	fprintf(stdout, "buf: %s\n", buf);
+ 	clock_gettime(CLOCK_MONOTONIC, &start);
 
 	pid = fork();
 	if (pid < 0) {
@@ -424,4 +433,7 @@ execute_command (command_t c, int profiling)
 	} else {
 		waitpid(pid, NULL, 0);
 	}
+	clock_gettime(CLOCK_MONOTONIC, &end);
+	log_command(NULL, profiling, start, end);
+
 }
