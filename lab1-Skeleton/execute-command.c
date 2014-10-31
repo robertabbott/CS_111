@@ -167,13 +167,27 @@ execute_simple_command(command_t c, int profiling)
 int
 execute_subshell(command_t c, int profiling)
 {
-	command_switch(c->u.command[0], profiling);
+ 	struct timespec start, end;
+	int pid;
+
+	clock_gettime(CLOCK_MONOTONIC, &start);
+
+	pid = fork();
+	if (!pid) {
+		command_switch(c->u.command[0], profiling);
+	} else {
+		int status;
+		waitpid(pid, &status, 0);
+		clock_gettime(CLOCK_MONOTONIC, &end);
+		log_command(c, profiling, start, end);
+		_exit(status);
+	}
 }
 
 int
 execute_pipe(command_t c, int profiling)
 {
-	struct timespec start, end;
+ 	struct timespec start, end;
 	int pid;
 
 	clock_gettime(CLOCK_MONOTONIC, &start);
@@ -211,7 +225,7 @@ execute_pipe(command_t c, int profiling)
 	}
 }
 
-int
+static int
 _execute_sequence(command_t c, int profiling)
 {
 	pid_t pid = fork();
