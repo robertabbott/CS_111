@@ -27,6 +27,9 @@
 #include <time.h>
 #include <sys/resource.h>
 
+#define EXIT(status) do {						\
+	_exit(status ? 1 : 0);						\
+	} while(0);
 
 #define GET_SYS_TIME(start, end, res)					\
 	do {								\
@@ -160,7 +163,7 @@ execute_simple_command(command_t c, int profiling)
 		waitpid(pid, &status, 0);
 		clock_gettime(CLOCK_MONOTONIC, &end);
 		log_command(c, profiling, start, end);
-		_exit(status ? 1 : 0);
+		EXIT(status);
 	}
 }
 
@@ -180,7 +183,7 @@ execute_subshell(command_t c, int profiling)
 		waitpid(pid, &status, 0);
 		clock_gettime(CLOCK_MONOTONIC, &end);
 		log_command(c, profiling, start, end);
-		_exit(status);
+		EXIT(status);
 	}
 }
 
@@ -220,7 +223,7 @@ execute_pipe(command_t c, int profiling)
 			waitpid(pid, &status, 0);
 			clock_gettime(CLOCK_MONOTONIC, &end);
 			log_command(c, profiling, start, end);
-			_exit(status);
+			EXIT(status);
 		}
 	}
 }
@@ -255,7 +258,7 @@ execute_sequence(command_t c, int profiling)
 	clock_gettime(CLOCK_MONOTONIC, &end);
 	log_command(c, profiling, start, end);
 
-	_exit(status);
+	EXIT(status);
 }
 
 static int
@@ -281,7 +284,7 @@ execute_if_command(command_t c, int profiling)
 
 	clock_gettime(CLOCK_MONOTONIC, &end);
 	log_command(c, profiling, start, end);
-	_exit(c->status);
+	EXIT(c->status);
 }
 
 execute_until_command(command_t c, int profiling)
@@ -314,7 +317,7 @@ execute_until_command(command_t c, int profiling)
 		command_switch(c->u.command[2], profiling);
 	}
 
-	_exit(c->status);
+	EXIT(c->status);
 }
 
 static int
@@ -345,7 +348,7 @@ execute_while_command(command_t c, int profiling)
 		command_switch(c->u.command[2], profiling);
 	}
 
-	_exit(c->status);
+	EXIT(c->status);
 }
 
 static int
