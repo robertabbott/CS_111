@@ -267,7 +267,7 @@ execute_if_command(command_t c, int profiling)
 	int status;
 	struct timespec start, end;
 
-	clock_gettime(CLOCK_MONOTONIC, &start);
+ 	clock_gettime(CLOCK_MONOTONIC, &start);
 
 	pid_t pid = fork();
 	if (!pid) {
@@ -292,13 +292,22 @@ execute_until_command(command_t c, int profiling)
 	int status;
 	struct timespec start, end;
 
+ 	clock_gettime(CLOCK_MONOTONIC, &start);
+
+	printf("untill: \n");
+
 	while (1) {
 		pid_t pid = fork();
-		if (!pid) {
+		if (pid == -1) {
+			EXIT(-1);
+		} else if (!pid) {
 			command_switch(c->u.command[0], profiling);
 		} else {
 			int status;
-			waitpid(pid, &status, 0);
+			if (waitpid(pid, &status, 0) != pid) {
+				waitpid(pid, &status, 0);
+			}
+			printf("untill: status = %d\n", status);
 			if (!status) {
 				break;
 			} else {
@@ -311,6 +320,8 @@ execute_until_command(command_t c, int profiling)
 			}
 		}
 	}
+
+	clock_gettime(CLOCK_MONOTONIC, &end);
 	log_command(c, profiling, start, end);
 
 	if (c->u.command[2]) {
@@ -323,6 +334,11 @@ execute_until_command(command_t c, int profiling)
 static int
 execute_while_command(command_t c, int profiling)
 {
+	int status;
+	struct timespec start, end;
+
+ 	clock_gettime(CLOCK_MONOTONIC, &start);
+
 	while (1) {
 		pid_t pid = fork();
 		if (!pid) {
@@ -344,6 +360,10 @@ execute_while_command(command_t c, int profiling)
 			}
 		}
 	}
+
+	clock_gettime(CLOCK_MONOTONIC, &end);
+	log_command(c, profiling, start, end);
+
 	if (c->u.command[2]) {
 		command_switch(c->u.command[2], profiling);
 	}
