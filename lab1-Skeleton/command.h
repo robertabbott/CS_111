@@ -19,6 +19,8 @@
 #include <stdio.h>
 
 #define BUFSIZE 1024
+#define GIGA 1000000000.0
+#define MEGA 1000000.0
 
 typedef struct command *command_t;
 typedef struct command_stream *command_stream_t;

@@ -24,6 +24,20 @@
 #include <string.h>
 #include <unistd.h>
 #include <error.h>
+#include <time.h>
+#include <sys/resource.h>
+
+
+#define GET_SYS_TIME(start, end, res)					\
+	do {								\
+	if ((end.tv_nsec - start.tv_nsec) < 0) {			\
+		res.tv_sec = end.tv_sec-start.tv_sec-1;			\
+		res.tv_nsec = 1000000000+end.tv_nsec-start.tv_nsec;	\
+	} else {							\
+		res.tv_sec = end.tv_sec-start.tv_sec;			\
+		res.tv_nsec = end.tv_nsec-start.tv_nsec;		\
+	}								\
+	} while(0);
 
 char buf[BUFSIZE];
 
@@ -33,11 +47,7 @@ command_switch(command_t c, int profiling);
 int
 prepare_profiling (char const *name)
 {
-  /* FIXME: Replace this with your implementation.  You may need to
-     add auxiliary functions and otherwise modify the source code.
-     You can also use external functions defined in the GNU C Library.  */
-  error (0, 0, "warning: profiling not yet implemented %s", name);
-  return -1;
+	return open(name, O_WRONLY | O_CREAT | O_TRUNC, 0644);
 }
 
 int
@@ -46,13 +56,51 @@ command_status (command_t c)
   return c->status;
 }
 
-char**
-tokenize_command(char *tokenArr)
+
+void
+log_command(command_t c, int profiling,
+	    struct timespec start, struct timespec end)
 {
-        int i = 0, len = strlen(tokenArr);
+	int  len;
+	double localtime, realtime, usertime, systime;
+	char timeBuf[BUFSIZE];
+	struct rusage self, children;
+	struct timespec realtv, localts;
+
+	getrusage(RUSAGE_CHILDREN, &children);
+	getrusage(RUSAGE_SELF, &self);
+
+	GET_SYS_TIME(start, end, realtv);
+	clock_gettime(CLOCK_REALTIME, &localts);
+
+	localtime = localts.tv_sec + (localts.tv_nsec / GIGA);
+	realtime = realtv.tv_sec + (realtv.tv_nsec / GIGA);
+	usertime = self.ru_utime.tv_sec + (self.ru_utime.tv_usec / MEGA) +
+		children.ru_utime.tv_sec + (children.ru_utime.tv_usec / MEGA);
+        systime = self.ru_stime.tv_sec + (self.ru_stime.tv_usec / MEGA) +
+		children.ru_stime.tv_sec + (children.ru_stime.tv_usec / MEGA);
+
+	len = snprintf(timeBuf, BUFSIZE, "%f %f %f %f ",
+		       localtime, realtime, usertime, systime);
+
+	// acquire lock
+	write(profiling, timeBuf, len);
+	construct_command(c, timeBuf);
+	write(profiling, timeBuf, strlen(timeBuf));
+	write(profiling, "\n", 1);
+	printf("%s\n", timeBuf);
+}
+
+char**
+tokenize_command(char *tokenArrOrig)
+{
+        int i = 0, len = strlen(tokenArrOrig);
         int wdcount = 1;
         char **tokenArrPtr;
+	char tokenArr[1024];
+	char *ptr = tokenArr;
 
+	strncpy(tokenArr, tokenArrOrig, len+1);
         while (i < len) {
                 if (tokenArr[i] == ' ') {
                         wdcount++;
@@ -62,7 +110,7 @@ tokenize_command(char *tokenArr)
 
         tokenArrPtr = malloc(sizeof(char *) * (wdcount + 1));
         for (i = 0; i <= wdcount; i++) {
-                char *token = strtok(tokenArr, " ");
+                char *token = strtok(ptr, " ");
                 if (token) {
                         tokenArrPtr[i] = malloc(strlen(token) + 1);
                         strcpy(tokenArrPtr[i], token);
@@ -70,7 +118,7 @@ tokenize_command(char *tokenArr)
                         tokenArrPtr[i] = NULL;
                         break;
                 }
-                tokenArr = NULL;
+                ptr = NULL;
         }
 	return tokenArrPtr;
 }
@@ -79,27 +127,41 @@ void
 execute_simple_command(command_t c, int profiling)
 {
 	char **tokenArrptr = tokenize_command(*(c->u.word));
-	if (c->input) {
-		int inFD;
-		inFD = open(c->input, O_RDONLY);
-		if (inFD == -1) {
-			perror("open input file: ");
-		} else {
-			dup2(inFD, STDIN_FILENO);
-			close(inFD);
+	struct timespec start, end;
+	int pid;
+
+	clock_gettime(CLOCK_MONOTONIC, &start);
+
+	pid = fork();
+	if (pid == 0) {
+		if (c->input) {
+			int inFD;
+			inFD = open(c->input, O_RDONLY);
+			if (inFD == -1) {
+				perror("open input file: ");
+			} else {
+				dup2(inFD, STDIN_FILENO);
+				close(inFD);
 			}
-	}
-	if (c->output) {
-		int outFD;
-		outFD = open(c->output, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-		if (outFD == -1) {
-			perror("open output file: ");
-		} else {
-			dup2(outFD, STDOUT_FILENO);
-			close(outFD);
 		}
+		if (c->output) {
+			int outFD;
+			outFD = open(c->output, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+			if (outFD == -1) {
+				perror("open output file: ");
+			} else {
+				dup2(outFD, STDOUT_FILENO);
+				close(outFD);
+			}
+		}
+		execvp(tokenArrptr[0], tokenArrptr);
+	} else {
+		int status;
+		waitpid(pid, &status, 0);
+		clock_gettime(CLOCK_MONOTONIC, &end);
+		log_command(c, profiling, start, end);
+		_exit(status);
 	}
-	execvp(tokenArrptr[0], tokenArrptr);
 }
 
 int
@@ -134,18 +196,27 @@ execute_pipe(command_t c, int profiling)
 	}
 }
 
-int execute_sequence(command_t c, int profiling)
+int
+_execute_sequence(command_t c, int profiling)
 {
 	pid_t pid = fork();
 
 	if (pid < 0) {
 		return -1;
 	} else if (!pid) {
-		command_switch(c->u.command[0], profiling);
+		command_switch(c, profiling);
 	} else {
-		waitpid(pid, NULL, 0);
-		command_switch(c->u.command[1], profiling);
+		int status;
+		waitpid(pid, &status, 0);
+		return status;
 	}
+}
+
+int
+execute_sequence(command_t c, int profiling)
+{
+	_execute_sequence(c->u.command[0], profiling);
+	_exit(_execute_sequence(c->u.command[1], profiling));
 }
 
 static int
@@ -264,7 +335,7 @@ execute_command (command_t c, int profiling)
 	if (!c) {
 		return;
 	}
-	buf[0] = '\0';
+
 	construct_command(c, buf);
 	fprintf(stdout, "buf: %s\n", buf);
 

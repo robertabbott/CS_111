@@ -162,6 +162,7 @@ void
 construct_command(command_t command, char *buf)
 {
 	int len = BUFSIZE;
+	buf[0] = '\0';
 	reconstruct_command(command, buf, &len);
 }
 
