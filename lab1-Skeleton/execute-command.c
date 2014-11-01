@@ -44,8 +44,41 @@
 
 char buf[BUFSIZE];
 
+int fd_lock;
+struct flock fl;
+
 static int
 command_switch(command_t c, int profiling);
+
+void flock_init()
+{
+	fl.l_whence = SEEK_SET; /* SEEK_SET, SEEK_CUR, SEEK_END */
+	fl.l_start  = 0;        /* Offset from l_whence         */
+	fl.l_len    = 0;        /* length, 0 = to EOF           */
+
+	if ((fd_lock = open("lkfile.lock",
+			    O_RDWR | O_CREAT | O_TRUNC, 0644)) == -1) {
+		perror("open");
+	}
+}
+
+void acquireLock()
+{
+	fl.l_pid    = getpid(); /* our PID                      */
+	fl.l_type = F_WRLCK;     /* F_RDLCK, F_WRLCK, F_UNLCK  */
+	fcntl(fd_lock, F_SETLKW, &fl);  /* F_GETLK, F_SETLK, F_SETLKW */
+	printf("acquired lock\n");
+}
+
+void releaseLock()
+{
+	fl.l_type = F_UNLCK;  /* set to unlock same region */
+
+	if (fcntl(fd_lock, F_SETLK, &fl) == -1) {
+		perror("fcntl");
+	}
+	printf("released lock\n");
+}
 
 int
 prepare_profiling (char const *name)
@@ -56,7 +89,7 @@ prepare_profiling (char const *name)
 int
 command_status (command_t c)
 {
-  return c->status;
+	return c->status;
 }
 
 
@@ -70,6 +103,9 @@ log_command(command_t c, int profiling,
 	struct rusage self, children;
 	struct timespec realtv, localts;
 
+	if (profiling == -1) {
+		return;
+	}
 	getrusage(RUSAGE_CHILDREN, &children);
 	getrusage(RUSAGE_SELF, &self);
 
@@ -86,6 +122,7 @@ log_command(command_t c, int profiling,
 	len = snprintf(timeBuf, BUFSIZE, "%f %f %f %f ",
 		       localtime, realtime, usertime, systime);
 
+	acquireLock();
 	// acquire lock
 	write(profiling, timeBuf, len);
 	if (c) {
@@ -100,6 +137,7 @@ log_command(command_t c, int profiling,
 	write(profiling, timeBuf, len);//strlen(timeBuf));
 	write(profiling, "\n", 1);
 	//	printf("%s\n", timeBuf);
+	releaseLock();
 }
 
 char**
