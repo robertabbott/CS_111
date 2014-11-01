@@ -27,3 +27,22 @@ Another helper, tokenize_command, is used by simple command to split the command
 the proper unix command.
 
 There are no known limitations to this implementation of lab 1B
+
+Lab 1C Implementation Details:
+There are two methods that enable logging. clock_gettime, which collects the performance information of a command, and log_command
+which then writes that information to the log file. Both clock_gettime and log_command are called at the end of each command execution.
+A locking mechanism is also implemented which makes it so that when log_command is called by a process that call to log_command acquires
+the lock an is therefore the only process allowed to write to the log file.
+
+Questions:
+1) The first column of the log file should be in non-decreasing order. The only way it would not be non-decreasing is if a process exited
+before another, but somehow the later exiting process acquired the log file lock first. 
+
+2) No. The total execution time of the command should not be greater than the sum of the CPU time spent in the user space and the kernel
+space. Since the total execution time will include bot the time spent in user and kernel space as well as any overhead not included in 
+the other two values.
+
+3) If they are calculated correctly columns two, three and four can never be negative since you obviously cannot spend negative time in
+on the CPU.
+
+4) 
