@@ -20,8 +20,24 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
-static void
+#define safe_snprintf(buf, len, ...) do { 	\
+	if (!(*len - 1)) {			\
+		return;				\
+	}					\
+	int slen;				\
+	snprintf(tbuf, BUFSIZE, __VA_ARGS__); 	\
+	slen = strlen(tbuf);			\
+	if ((*len - slen) <= 1) {		\
+		slen = *len - 1;		\
+	}					\
+        strncat(buf, tbuf, slen); 		\
+	*len = *len - slen;			\
+	} while(0)
+
+char tbuf[BUFSIZE];
+
 command_indented_print (int indent, command_t c)
 {
   switch (c->type)
@@ -83,6 +99,71 @@ command_indented_print (int indent, command_t c)
     printf ("<%s", c->input);
   if (c->output)
     printf (">%s", c->output);
+}
+
+static void
+reconstruct_command(command_t c, char *buf, int *len)
+{
+	switch (c->type) {
+	case IF_COMMAND:
+	case UNTIL_COMMAND:
+	case WHILE_COMMAND:
+		safe_snprintf(buf, len, "%s ",
+			      (c->type == IF_COMMAND ? "if" :
+			       c->type == UNTIL_COMMAND ? "until" : "while"));
+		reconstruct_command (c->u.command[0], buf, len);
+		safe_snprintf (buf, len, "%s ",
+			       c->type == IF_COMMAND ? "then" : "do");
+		reconstruct_command (c->u.command[1], buf, len);
+		if (c->type == IF_COMMAND && c->u.command[2]) {
+			safe_snprintf(buf, len, "else ");
+			reconstruct_command (c->u.command[2], buf, len);
+		}
+		safe_snprintf(buf, len, "%s ",
+			      c->type == IF_COMMAND ? "fi" : "done");
+		break;
+
+	case SEQUENCE_COMMAND:
+	case PIPE_COMMAND: {
+		reconstruct_command (c->u.command[0], buf, len);
+		char separator = c->type == SEQUENCE_COMMAND ? ';' : '|';
+		safe_snprintf(buf, len, "%c ", separator);
+		reconstruct_command (c->u.command[1], buf, len);
+		break;
+	}
+	case SIMPLE_COMMAND: {
+		char **w = c->u.word;
+		safe_snprintf(buf, len, "%s ", *w);
+		while (*++w) {
+			safe_snprintf(buf, len, "%s ", *w);
+   		}
+		break;
+	}
+
+	case SUBSHELL_COMMAND:
+		safe_snprintf(buf, len, "( ");
+		reconstruct_command (c->u.command[0], buf, len);
+		safe_snprintf(buf, len, ") ");
+		break;
+
+	default:
+		abort ();
+	}
+
+	if (c->input) {
+		safe_snprintf(buf, len, "<%s ", c->input);
+	}
+	if (c->output) {
+		safe_snprintf(buf, len, ">%s ", c->output);
+	}
+}
+
+void
+construct_command(command_t command, char *buf)
+{
+	int len = BUFSIZE;
+	buf[0] = '\0';
+	reconstruct_command(command, buf, &len);
 }
 
 void

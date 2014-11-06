@@ -16,6 +16,11 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <stdlib.h>
+#include <stdio.h>
+
+#define BUFSIZE 1024
+#define GIGA 1000000000.0
+#define MEGA 1000000.0
 
 typedef struct command *command_t;
 typedef struct command_stream *command_stream_t;
@@ -46,6 +51,7 @@ command_t read_command_stream (command_stream_t *stream);
 
 /* Print a command to stdout, for debugging.  */
 void print_command (command_t);
+void construct_command(command_t command, char *buf);
 
 /* Execute a command.  Use profiling according to the flag; do not profile
    if the flag is negative.  */

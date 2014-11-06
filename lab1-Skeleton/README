@@ -1,15 +1,75 @@
-CS 111 Lab 1A
+CS 111 Lab 1C
 
 
 Robert Abbott 004432123
 Mohammed Junaid Ahmed 104-293-008
 
-Implementation Details:
+Lab 1C Implementation Details:
+There are two methods that enable logging. clock_gettime, which collects the performance information of a command, and log_command
+which then writes that information to the log file. Both clock_gettime and log_command are called at the end of each command execution.
+A locking mechanism is also implemented which makes it so that when log_command is called by a process that call to log_command acquires
+the lock an is therefore the only process allowed to write to the log file.
+
+Questions:
+1) The first column of the log file should be in non-decreasing order. The only way it would not be non-decreasing is if a process exited
+before another, but somehow the later exiting process acquired the log file lock first. 
+
+2) Yes, the real cpu time of the command can be lesser than the sum of the CPU time spent in the user space and the kernel
+space. In case of multiple cores and multi threaded programs, the user cpu time and kernel cpu time reported will much greater
+because due to multiple cores, multiple threads can run in parallel. Thus, bringing down the real cpu time.
+
+3) Yes. It is possible when the clock is changed to older value while the command/program is in its middle of execution.
+
+4) We used the script with a set of commands which we used as input and collected the output of it. We manually matched the
+logs printed in the log file.
+
+echo a > /tmp/a
+echo b > /tmp/b
+cat /tmp/a; cat /tmp/b
+cat /tmp/a | grep a
+if cat /tmp/a
+then
+    cat /tmp/a
+else
+    cat /tmp/b
+fi
+(cat /tmp/a | grep a)
+echo c > /tmp/c
+while cat /tmp/c
+do
+    rm /tmp/c;
+done
+until cat /tmp/c
+do
+    echo c > /tmp/c
+done
+cat /tmp/a; cat /tmp/b
+cat /tmp/a; cat /tmp/b
+rm /tmp/a
+rm /tmp/b
+
+
+Lab 1A Implementation Details:
 The main method in our implementation is make_command_stream. This creates a linked list of command nodes. Each nodes is a complete command.
 
-The complete command placed in each node is generated with a call to the makeCommandStreamUtil method. Breaks the command into tokens and fills the command_t structure recursively. The recursive structure of makeCommandStreamUtil enables parsing subcommands to be stored in the command array of its super command. 
+The complete command placed in each node is generated with a call to the makeCommandStreamUtil method. Breaks the command into tokens and fills the command_t structure recursively. The recursive structure of makeCommandStreamUtil enables parsing subcommands to be stored in the command array of its super command.
 
-Tokens are generated using ReadNextToken helper function which continues through the stream until it finds a delimiter such as ";", " ", "\n", "(" etc. ReadNextToken then returns both the token and the delimiters. 
+Tokens are generated using ReadNextToken helper function which continues through the stream until it finds a delimiter such as ";", " ", "\n", "(" etc. ReadNextToken then returns both the token and the delimiters.
 
 Limitations:
 The current implementation fails to raise errors for some of the ill-formed commands. To handle this a stack is implemented to track which commands occurred. By popping old commands when the next command in a sequence occurred and checking that closing commands occur (such as done, fi) the stack would ensure that ill-formed commands are detected. The stack code needs to be enchanced to handle the cases for example - if then a; fi. It fails to see that between if and then, there was no command.
+
+
+Lab 1B Implementation Details:
+The main method in the implementation of lab 1B is execute_command. If a non-null command is passed to execute_command, it forks
+and makes a call to command_switch. The parents process waits while the command is executed. command_switch checks the type of the
+command and calls the helper function that corresponds to that command type.
+
+Each command type is given its own helper function. Any time a command helper needs to execute a subcommand it makes a call to
+switch_command and passes the subcommand.
+
+Another helper, tokenize_command, is used by simple command to split the command->u such that it can be passed to execvp and execute
+the proper unix command.
+
+There are no known limitations to this implementation of lab 1B
+
