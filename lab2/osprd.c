@@ -113,7 +113,7 @@ static void osprd_process_request(osprd_info_t *d, struct request *req)
 	}
 
 	// EXERCISE: Perform the read or write request by copying data between
-	// our data array and the request's buffer.
+	// our data array and the request's buffer
 	// Hint: The 'struct request' argument tells you what kind of request
 	// this is, and which sectors are being read or written.
 	// Read about 'struct request' in <linux/blkdev.h>.
@@ -122,6 +122,18 @@ static void osprd_process_request(osprd_info_t *d, struct request *req)
 
 	// Your code here.
 	eprintk("Should process request...\n");
+
+  unsigned int requestType = rq_data_dir(req);
+  unsigned int dataLength = req->current_nr_sectors * SECTOR_SIZE;
+
+  if (requestType == READ) {
+    memcpy((void *) req->buffer, (void *) dataPtr, dataLength);
+  } else if (requestType == WRITE) {
+    memcpy((void *) dataPtr, (void *) req->buffer, dataLength);
+  } else {
+    eprintk ("invalid command \n");
+    end_request(req, 0);
+  }
 
 	end_request(req, 1);
 }
