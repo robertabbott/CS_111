@@ -125,6 +125,7 @@ static void osprd_process_request(osprd_info_t *d, struct request *req)
 
   unsigned int requestType = rq_data_dir(req);
   unsigned int dataLength = req->current_nr_sectors * SECTOR_SIZE;
+  uint8_t *dataPtr = d->data + (SECTOR_SIZE * req->sector);
 
   if (requestType == READ) {
     memcpy((void *) req->buffer, (void *) dataPtr, dataLength);
