@@ -120,22 +120,18 @@ static void osprd_process_request(osprd_info_t *d, struct request *req)
 	// Consider the 'req->sector', 'req->current_nr_sectors', and
 	// 'req->buffer' members, and the rq_data_dir() function.
 
-	// Your code here.
-	eprintk("Should process request...\n");
+	unsigned int requestType = rq_data_dir(req);
+	unsigned int dataLength = req->current_nr_sectors * SECTOR_SIZE;
+	uint8_t *dataPtr = d->data + (SECTOR_SIZE * req->sector);
 
-  unsigned int requestType = rq_data_dir(req);
-  unsigned int dataLength = req->current_nr_sectors * SECTOR_SIZE;
-  uint8_t *dataPtr = d->data + (SECTOR_SIZE * req->sector);
-
-  if (requestType == READ) {
-    memcpy((void *) req->buffer, (void *) dataPtr, dataLength);
-  } else if (requestType == WRITE) {
-    memcpy((void *) dataPtr, (void *) req->buffer, dataLength);
-  } else {
-    eprintk ("invalid command \n");
-    end_request(req, 0);
-  }
-
+	if (requestType == READ) {
+		memcpy((void *) req->buffer, (void *) dataPtr, dataLength);
+	} else if (requestType == WRITE) {
+		memcpy((void *) dataPtr, (void *) req->buffer, dataLength);
+	} else {
+		eprintk ("invalid command \n");
+		end_request(req, 0);
+	}
 	end_request(req, 1);
 }
 
@@ -193,7 +189,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 	int filp_writable = (filp->f_mode & FMODE_WRITE) != 0;
 
 	// This line avoids compiler warnings; you may remove it.
-	(void) filp_writable, (void) d;
+	//	(void) filp_writable, (void) d;
 
 	// Set 'r' to the ioctl's return value: 0 on success, negative on error
 
