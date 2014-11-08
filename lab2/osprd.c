@@ -48,7 +48,7 @@ module_param(nsectors, int, 0);
 /* The internal representation of our device. */
 typedef struct osprd_info {
 	uint8_t *data;                  // The data array. Its size is
-	                                // (nsectors * SECTOR_SIZE) bytes.
+					// (nsectors * SECTOR_SIZE) bytes.
 
 	osp_spinlock_t mutex;           // Mutex for synchronizing access to
 					// this block device
@@ -63,13 +63,13 @@ typedef struct osprd_info {
 					// the device lock
 
 	/* HINT: You may want to add additional fields to help
-	         in detecting deadlock. */
+		 in detecting deadlock. */
 
 	// The following elements are used internally; you don't need
 	// to understand them.
 	struct request_queue *queue;    // The device request queue.
 	spinlock_t qlock;		// Used internally for mutual
-	                                //   exclusion in the 'queue'.
+					//   exclusion in the 'queue'.
 	struct gendisk *gd;             // The generic disk.
 } osprd_info_t;
 
@@ -186,7 +186,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 	int r = 0;			// return value: initially 0
 
 	// is file open for writing?
-	int filp_writable = (filp->f_mode & FMODE_WRITE) != 0;
+	//	int filp_writable = (filp->f_mode & FMODE_WRITE) != 0;
 
 	// This line avoids compiler warnings; you may remove it.
 	//	(void) filp_writable, (void) d;
@@ -201,7 +201,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		// to write-lock the ramdisk; otherwise attempt to read-lock
 		// the ramdisk.
 		//
-                // This lock request must block using 'd->blockq' until:
+		// This lock request must block using 'd->blockq' until:
 		// 1) no other process holds a write lock;
 		// 2) either the request is for a read lock, or no other process
 		//    holds a read lock; and
@@ -232,7 +232,20 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 
 		// Your code here (instead of the next two lines).
 		eprintk("Attempting to acquire\n");
-		r = -ENOTTY;
+		unsigned my_ticket;
+
+		osp_spin_lock(&d->mutex);
+		{
+			my_ticket = d->ticket_head++;
+		}
+		osp_spin_unlock(&d->mutex);
+		if (wait_event_interruptible(d->blockq,
+					     my_ticket == d->ticket_tail)) {
+			return -ERESTARTSYS;
+		}
+		eprintk("acquired lock\n");
+
+		r = 0;
 
 	} else if (cmd == OSPRDIOCTRYACQUIRE) {
 
@@ -257,10 +270,18 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		// you need, and return 0.
 
 		// Your code here (instead of the next line).
-		r = -ENOTTY;
-
-	} else
+		eprintk("Attempting to release the lock\n");
+		osp_spin_lock(&d->mutex);
+		{
+			d->ticket_tail++;
+		}
+		osp_spin_unlock(&d->mutex);
+		wake_up_all(&d->blockq);
+		eprintk("released the lock\n");
+		r = 0;
+	} else {
 		r = -ENOTTY; /* unknown command */
+	}
 	return r;
 }
 
