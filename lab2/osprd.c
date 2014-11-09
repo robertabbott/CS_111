@@ -39,6 +39,8 @@
 	}					\
 	}while(0);
 
+#define QUEUE_SIZE 1024
+
 MODULE_LICENSE("Dual BSD/GPL");
 MODULE_DESCRIPTION("CS 111 RAM Disk");
 // EXERCISE: Pass your names into the kernel as the module's authors.
@@ -52,6 +54,9 @@ MODULE_AUTHOR("Robert Abbott and Mohammed Junaid Ahmed");
 static int nsectors = 32;
 module_param(nsectors, int, 0);
 
+typedef struct {
+	pid_t pid;
+} QUEUE;
 
 /* The internal representation of our device. */
 typedef struct osprd_info {
@@ -74,6 +79,10 @@ typedef struct osprd_info {
 		 in detecting deadlock. */
 
 	unsigned nbw;
+	unsigned qcount;
+	unsigned f;
+	unsigned r;
+	QUEUE pidqueue[QUEUE_SIZE];
 
 	// The following elements are used internally; you don't need
 	// to understand them.
@@ -109,6 +118,74 @@ static void for_each_open_file(struct task_struct *task,
 						osprd_info_t *user_data),
 			       osprd_info_t *user_data);
 
+
+int
+enqueue(osprd_info_t *d, pid_t pid)
+{
+	d->pidqueue[d->r].pid = pid;
+	d->r = (d->r + 1) % QUEUE_SIZE;
+
+	return 0;
+}
+
+int
+dequeue(osprd_info_t *d, unsigned *next)
+{
+	// if empty return -2
+	if (d->qcount == 0) {
+		*next = -2;
+	} else {
+		d->f = (d->f + 1) % QUEUE_SIZE;
+		d->qcount--;
+		*next = d->pidqueue[d->f].pid;
+	}
+	return 0;
+}
+
+int
+is_deadlock_possible(osprd_info_t *d, pid_t pid)
+{
+	unsigned i = d->f;
+	for (; i != d->r; i = (i + 1) % QUEUE_SIZE) {
+		if (d->pidqueue[i].pid == pid) {
+			return 1;
+		}
+	}
+	return 0;
+}
+
+void
+_mark_defunct(osprd_info_t *d, pid_t pid)
+{
+	unsigned i = d->f;
+	for (; i != d->r; i = (i + 1) % QUEUE_SIZE) {
+		if (d->pidqueue[i].pid == pid) {
+			d->pidqueue[i].pid = -1;
+		}
+	}
+}
+
+void
+mark_defunct(osprd_info_t *d, pid_t pid, int write, int ticket)
+{
+	int next;
+
+	osp_spin_lock(&d->mutex);
+	{
+		if (write) {
+			d->nbw--;
+		}
+		if (ticket == d->ticket_tail) {
+			do {
+				d->ticket_tail++;
+				dequeue(d, &next);
+			} while (next == -1);
+		} else {
+			_mark_defunct(d, pid);
+		}
+	}
+	osp_spin_unlock(&d->mutex);
+}
 
 /*
  * osprd_process_request(d, req)
@@ -195,6 +272,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 	osprd_info_t *d = file2osprd(filp);	// device info
 	int r = 0;			// return value: initially 0
 	int nbw = -1;
+	int is_deadlock;
 
 	// is file open for writing?
 	int filp_writable = (filp->f_mode & FMODE_WRITE) != 0;
@@ -247,6 +325,11 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 
 		osp_spin_lock(&d->mutex);
 		{
+			is_deadlock = is_deadlock_possible(d, current->pid);
+			if (is_deadlock) {
+				goto unlock;
+			}
+			enqueue(d, current->pid);
 			my_ticket = d->ticket_head++;
 			if (filp_writable) {
 				d->nbw++;
@@ -254,11 +337,18 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 				nbw = d->nbw;
 			}
 		}
+	unlock:
 		osp_spin_unlock(&d->mutex);
+
+		if (is_deadlock) {
+			return -EDEADLK;
+		}
 
 		if (filp_writable) {
 			if (wait_event_interruptible(d->blockq,
 						     my_ticket == d->ticket_tail)) {
+				mark_defunct(d, current->pid,
+					     filp_writable, my_ticket);
 				eprintk("received signal\n");
 				return -ERESTARTSYS;
 			}
@@ -266,6 +356,8 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			if (nbw &&
 			    wait_event_interruptible(d->blockq,
 						     my_ticket == d->ticket_tail)) {
+				mark_defunct(d, current->pid,
+					     filp_writable, my_ticket);
 				eprintk("received signal\n");
 				return -ERESTARTSYS;
 			}
@@ -299,7 +391,13 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		my_eprintk("Attempting to release the lock\n");
 		osp_spin_lock(&d->mutex);
 		{
-			d->ticket_tail++;
+			unsigned next;
+
+			do {
+				d->ticket_tail++;
+				dequeue(d, &next);
+			} while (next == -1);
+
 			if (filp_writable) {
 				d->nbw--;
 			}
