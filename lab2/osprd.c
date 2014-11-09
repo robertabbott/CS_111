@@ -17,6 +17,8 @@
 #include "spinlock.h"
 #include "osprd.h"
 
+#define DEBUG 0
+
 /* The size of an OSPRD sector. */
 #define SECTOR_SIZE	512
 
@@ -30,6 +32,12 @@
  * kernel does not print all messages to the console.  Levels like KERN_ALERT
  * and KERN_EMERG will make sure that you will see messages.) */
 #define eprintk(format, ...) printk(KERN_NOTICE format, ## __VA_ARGS__)
+
+#define my_eprintk(format, ...) do {		\
+	if (DEBUG) {				\
+	eprintk(format, ## __VA_ARGS__);	\
+	}					\
+	}while(0);
 
 MODULE_LICENSE("Dual BSD/GPL");
 MODULE_DESCRIPTION("CS 111 RAM Disk");
@@ -64,6 +72,8 @@ typedef struct osprd_info {
 
 	/* HINT: You may want to add additional fields to help
 		 in detecting deadlock. */
+
+	unsigned nbw;
 
 	// The following elements are used internally; you don't need
 	// to understand them.
@@ -184,9 +194,10 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 {
 	osprd_info_t *d = file2osprd(filp);	// device info
 	int r = 0;			// return value: initially 0
+	int nbw = -1;
 
 	// is file open for writing?
-	//	int filp_writable = (filp->f_mode & FMODE_WRITE) != 0;
+	int filp_writable = (filp->f_mode & FMODE_WRITE) != 0;
 
 	// This line avoids compiler warnings; you may remove it.
 	//	(void) filp_writable, (void) d;
@@ -231,22 +242,37 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		// be protected by a spinlock; which ones?)
 
 		// Your code here (instead of the next two lines).
-		eprintk("Attempting to acquire\n");
+		my_eprintk("Attempting to acquire\n");
 		unsigned my_ticket;
 
 		osp_spin_lock(&d->mutex);
 		{
 			my_ticket = d->ticket_head++;
+			if (filp_writable) {
+				d->nbw++;
+			} else {
+				nbw = d->nbw;
+			}
 		}
 		osp_spin_unlock(&d->mutex);
-		if (wait_event_interruptible(d->blockq,
-					     my_ticket == d->ticket_tail)) {
-			return -ERESTARTSYS;
+
+		if (filp_writable) {
+			if (wait_event_interruptible(d->blockq,
+						     my_ticket == d->ticket_tail)) {
+				eprintk("received signal\n");
+				return -ERESTARTSYS;
+			}
+		} else {
+			if (nbw &&
+			    wait_event_interruptible(d->blockq,
+						     my_ticket == d->ticket_tail)) {
+				eprintk("received signal\n");
+				return -ERESTARTSYS;
+			}
 		}
-		eprintk("acquired lock\n");
+		my_eprintk("acquired lock\n");
 
 		r = 0;
-
 	} else if (cmd == OSPRDIOCTRYACQUIRE) {
 
 		// EXERCISE: ATTEMPT to lock the ramdisk.
@@ -270,14 +296,17 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		// you need, and return 0.
 
 		// Your code here (instead of the next line).
-		eprintk("Attempting to release the lock\n");
+		my_eprintk("Attempting to release the lock\n");
 		osp_spin_lock(&d->mutex);
 		{
 			d->ticket_tail++;
+			if (filp_writable) {
+				d->nbw--;
+			}
 		}
 		osp_spin_unlock(&d->mutex);
 		wake_up_all(&d->blockq);
-		eprintk("released the lock\n");
+		my_eprintk("released the lock\n");
 		r = 0;
 	} else {
 		r = -ENOTTY; /* unknown command */

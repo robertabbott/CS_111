@@ -249,6 +249,9 @@ int main(int argc, char *argv[])
 		transfer(STDIN_FILENO, devfd, size);
 	else
 		transfer(devfd, STDOUT_FILENO, size);
+	if (dolock || dotrylock) {
+		ioctl(devfd, OSPRDIOCRELEASE, NULL);
+	}
 
 	exit(0);
 }
