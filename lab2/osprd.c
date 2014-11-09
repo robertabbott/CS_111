@@ -251,10 +251,27 @@ static int osprd_close_last(struct inode *inode, struct file *filp)
 		// as appropriate.
 
 		// Your code here.
+		my_eprintk("Attempting to release the lock\n");
+		if (filp->f_flags & F_OSPRD_LOCKED) {
+			osp_spin_lock(&d->mutex);
+			{
+				int next;
 
-		// This line avoids compiler warnings; you may remove it.
-		(void) filp_writable, (void) d;
+				do {
+					d->ticket_tail++;
+					dequeue(d, &next);
+					eprintk("%d: incl tail, next = %d\n",
+						current->pid, next);
+				} while (next == -1);
 
+				if (filp_writable) {
+					d->nbw--;
+				}
+			}
+			osp_spin_unlock(&d->mutex);
+			wake_up_all(&d->blockq);
+			my_eprintk("%d: released the lock\n", current->pid);
+		}
 	}
 
 	return 0;
@@ -368,7 +385,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			}
 		}
 		my_eprintk("acquired lock %d\n", current->pid);
-
+		filp->f_flags |= F_OSPRD_LOCKED;
 		r = 0;
 	} else if (cmd == OSPRDIOCTRYACQUIRE) {
 
@@ -394,6 +411,11 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 
 		// Your code here (instead of the next line).
 		my_eprintk("Attempting to release the lock\n");
+		if (!(filp->f_flags & F_OSPRD_LOCKED)) {
+			return -EINVAL;
+		}
+		filp->f_flags &= ~F_OSPRD_LOCKED;
+
 		osp_spin_lock(&d->mutex);
 		{
 			int next;
