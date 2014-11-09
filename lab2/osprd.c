@@ -250,7 +250,6 @@ static int osprd_close_last(struct inode *inode, struct file *filp)
 		// a lock, release the lock.  Also wake up blocked processes
 		// as appropriate.
 
-		// Your code here.
 		my_eprintk("Attempting to release the lock\n");
 		if (filp->f_flags & F_OSPRD_LOCKED) {
 			osp_spin_lock(&d->mutex);
@@ -260,7 +259,7 @@ static int osprd_close_last(struct inode *inode, struct file *filp)
 				do {
 					d->ticket_tail++;
 					dequeue(d, &next);
-					eprintk("%d: incl tail, next = %d\n",
+					my_eprintk("%d: incl tail, next = %d\n",
 						current->pid, next);
 				} while (next == -1);
 
@@ -293,6 +292,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 	int r = 0;			// return value: initially 0
 	int nbw = -1;
 	int is_deadlock;
+  int qcount = -1;
 
 	// is file open for writing?
 	int filp_writable = (filp->f_mode & FMODE_WRITE) != 0;
@@ -370,7 +370,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 						     my_ticket == d->ticket_tail)) {
 				eprintk("%d:write: received signal\n", current->pid);
 				mark_defunct(d, current->pid,
-					     filp_writable, my_ticket);	
+					     filp_writable, my_ticket);
 
 				return -ERESTARTSYS;
 			}
@@ -397,8 +397,47 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		// Otherwise, if we can grant the lock request, return 0.
 
 		// Your code here (instead of the next two lines).
-		eprintk("Attempting to try acquire\n");
-		r = -ENOTTY;
+
+
+    // check for deadlock
+		osp_spin_lock(&d->mutex);
+		{
+			is_deadlock = is_deadlock_possible(d, current->pid);
+			if (is_deadlock) {
+        return -EBUSY;
+			}
+      qcount = d->qcount;
+      nbw = d->nbw;
+    }
+		osp_spin_unlock(&d->mutex);
+
+    // check for queued requests
+		if (filp_writable) {
+      if (qcount == 0) {
+        // grant lock
+        osp_spin_lock(&d->mutex);
+        d->nbw++;
+      } else {
+        return -EBUSY;
+      }
+	  } else {
+      // check for writers
+		  if (nbw == 0) {
+        // grant lock
+        osp_spin_lock(&d->mutex);
+      } else {
+        return -EBUSY;
+      }
+		}
+
+    // add process to queue and inc tickets
+    enqueue(d, current->pid);
+		d->ticket_head++;
+    //d->ticket_tail++;
+
+    filp->f_flags |= F_OSPRD_LOCKED;
+    osp_spin_unlock(&d->mutex);
+
 
 	} else if (cmd == OSPRDIOCRELEASE) {
 
