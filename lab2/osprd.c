@@ -55,7 +55,7 @@ static int nsectors = 32;
 module_param(nsectors, int, 0);
 
 typedef struct {
-	pid_t pid;
+	int pid;
 } QUEUE;
 
 /* The internal representation of our device. */
@@ -124,12 +124,13 @@ enqueue(osprd_info_t *d, pid_t pid)
 {
 	d->pidqueue[d->r].pid = pid;
 	d->r = (d->r + 1) % QUEUE_SIZE;
+	d->qcount++;
 
 	return 0;
 }
 
 int
-dequeue(osprd_info_t *d, unsigned *next)
+dequeue(osprd_info_t *d, int *next)
 {
 	// if empty return -2
 	if (d->qcount == 0) {
@@ -161,6 +162,8 @@ _mark_defunct(osprd_info_t *d, pid_t pid)
 	for (; i != d->r; i = (i + 1) % QUEUE_SIZE) {
 		if (d->pidqueue[i].pid == pid) {
 			d->pidqueue[i].pid = -1;
+			my_eprintk("%d: marked self defunct to %d\n", pid,
+				   d->pidqueue[i].pid);
 		}
 	}
 }
@@ -320,7 +323,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		// be protected by a spinlock; which ones?)
 
 		// Your code here (instead of the next two lines).
-		my_eprintk("Attempting to acquire\n");
+		my_eprintk("Attempting to acquire %d\n", current->pid);
 		unsigned my_ticket;
 
 		osp_spin_lock(&d->mutex);
@@ -341,28 +344,30 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		osp_spin_unlock(&d->mutex);
 
 		if (is_deadlock) {
+			eprintk("handling deadlock gracefully %d\n", current->pid);
 			return -EDEADLK;
 		}
 
 		if (filp_writable) {
 			if (wait_event_interruptible(d->blockq,
 						     my_ticket == d->ticket_tail)) {
+				eprintk("%d:write: received signal\n", current->pid);
 				mark_defunct(d, current->pid,
-					     filp_writable, my_ticket);
-				eprintk("received signal\n");
+					     filp_writable, my_ticket);	
+
 				return -ERESTARTSYS;
 			}
 		} else {
 			if (nbw &&
 			    wait_event_interruptible(d->blockq,
 						     my_ticket == d->ticket_tail)) {
+				eprintk("%d:read: received signal\n", current->pid);
 				mark_defunct(d, current->pid,
 					     filp_writable, my_ticket);
-				eprintk("received signal\n");
 				return -ERESTARTSYS;
 			}
 		}
-		my_eprintk("acquired lock\n");
+		my_eprintk("acquired lock %d\n", current->pid);
 
 		r = 0;
 	} else if (cmd == OSPRDIOCTRYACQUIRE) {
@@ -391,11 +396,13 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		my_eprintk("Attempting to release the lock\n");
 		osp_spin_lock(&d->mutex);
 		{
-			unsigned next;
+			int next;
 
 			do {
 				d->ticket_tail++;
 				dequeue(d, &next);
+				eprintk("%d: incl tail, next = %d\n",
+					current->pid, next);
 			} while (next == -1);
 
 			if (filp_writable) {
@@ -404,7 +411,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		}
 		osp_spin_unlock(&d->mutex);
 		wake_up_all(&d->blockq);
-		my_eprintk("released the lock\n");
+		my_eprintk("%d: released the lock\n", current->pid);
 		r = 0;
 	} else {
 		r = -ENOTTY; /* unknown command */
