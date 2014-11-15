@@ -30,6 +30,12 @@
  * kernel does not print all messages to the console.  Levels like KERN_ALERT
  * and KERN_EMERG will make sure that you will see messages.) */
 #define eprintk(format, ...) printk(KERN_NOTICE format, ## __VA_ARGS__)
+#define DEBUG 1
+#define my_eprintk(format, ...) do {					\
+		if (DEBUG) {						\
+			eprintk(format, ## __VA_ARGS__);	\
+		}							\
+	} while(0);
 
 // The actual disk data is just an array of raw memory.
 // The initial array is defined in fsimg.c, based on your 'base' directory.
@@ -261,6 +267,9 @@ ospfs_mk_linux_inode(struct super_block *sb, ino_t ino)
 
 	} else if (oi->oi_ftype == OSPFS_FTYPE_DIR) {
 		// Make an inode for a directory.
+		my_eprintk("magic:%d, nblocks:%d, ninodes:%d, firstinob:%d\n",
+			   ospfs_super->os_magic, ospfs_super->os_nblocks,
+			   ospfs_super->os_ninodes, ospfs_super->os_firstinob);
 		inode->i_mode = oi->oi_mode | S_IFDIR;
 		inode->i_op = &ospfs_dir_inode_ops;
 		inode->i_fop = &ospfs_dir_file_ops;
@@ -302,6 +311,7 @@ ospfs_fill_super(struct super_block *sb, void *data, int flags)
 	    || !(sb->s_root = d_alloc_root(root_inode))) {
 		iput(root_inode);
 		sb->s_dev = 0;
+		my_eprintk("fill super failed, returning ENOMEM");
 		return -ENOMEM;
 	}
 
@@ -353,6 +363,7 @@ ospfs_dir_lookup(struct inode *dir, struct dentry *dentry, struct nameidata *ign
 	struct inode *entry_inode = NULL;
 	int entry_off;
 
+	my_eprintk("ospfs_dir_lookup::start\n");
 	// Make sure filename is not too long
 	if (dentry->d_name.len > OSPFS_MAXNAMELEN)
 		return (struct dentry *) ERR_PTR(-ENAMETOOLONG);
@@ -385,6 +396,8 @@ ospfs_dir_lookup(struct inode *dir, struct dentry *dentry, struct nameidata *ign
 	// If it returns a new dentry, we need to set its operations.
 	if ((dentry = d_splice_alias(entry_inode, dentry)))
 		dentry->d_op = &ospfs_dentry_ops;
+
+	my_eprintk("ospfs_dir_lookup: dentry is \n", dentry ? "not NULL" : "NULL");
 	return dentry;
 }
 
@@ -429,6 +442,7 @@ ospfs_dir_readdir(struct file *filp, void *dirent, filldir_t filldir)
 	int r = 0;		/* Error return value, if any */
 	int ok_so_far = 0;	/* Return value from 'filldir' */
 
+	my_eprintk("ospfs_dir_readdir: start\n");
 	// f_pos is an offset into the directory's data, plus two.
 	// The "plus two" is to account for "." and "..".
 	if (r == 0 && f_pos == 0) {
@@ -553,6 +567,7 @@ static uint32_t
 allocate_block(void)
 {
 	/* EXERCISE: Your code here */
+	/* 
 	return 0;
 }
 
@@ -1080,6 +1095,7 @@ ospfs_create(struct inode *dir, struct dentry *dentry, int mode, struct nameidat
 {
 	ospfs_inode_t *dir_oi = ospfs_inode(dir->i_ino);
 	uint32_t entry_ino = 0;
+	my_eprintk("ospfs_create:: start\n");
 	/* EXERCISE: Your code here. */
 	return -EINVAL; // Replace this line
 
