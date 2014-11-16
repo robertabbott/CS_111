@@ -578,9 +578,18 @@ ospfs_unlink(struct inode *dirino, struct dentry *dentry)
 static uint32_t
 allocate_block(void)
 {
+	int i;
 	/* EXERCISE: Your code here */
-	/* 
-	return 0;
+	void *free_map = ospfs_block(OSPFS_FREEMAP_BLK);
+
+	for (i = OSPFS_FREEMAP_BLK; i < ospfs_super->os_nblocks; i++) {
+		if (bitvector_test(free_map, i)) {
+			bitvector_clear(free_map, i);
+			break;
+		}
+	}
+
+	return (i == ospfs_super->os_nblocks) ? 0 : i;
 }
 
 
@@ -599,6 +608,7 @@ static void
 free_block(uint32_t blockno)
 {
 	/* EXERCISE: Your code here */
+	bitvector_set(ospfs_block(OSPFS_FREEMAP_BLK), blockno);
 }
 
 
@@ -706,17 +716,103 @@ direct_index(uint32_t b)
 //     indirect blocks.
 //  3) update the oi->oi_size field
 
+/* Return Newly allocated block number */
+static uint32_t
+_add_block(int *ptr)
+{
+	uint32_t block_no = allocate_block();
+
+	if (block_no) {
+		*ptr = block_no;
+		memset(ospfs_block(block_no), 0, OSPFS_BLKSIZE);
+	}
+	return block_no;
+}
+
 static int
 add_block(ospfs_inode_t *oi)
 {
 	// current number of blocks in file
 	uint32_t n = ospfs_size2nblocks(oi->oi_size);
+	int32_t next_block = n + 1;
+	int32_t retval = -ENOSPC;
+	uint32_t block_no = 0;
+	uint32_t *ptr;
 
 	// keep track of allocations to free in case of -ENOSPC
-	uint32_t *allocated[2] = { 0, 0 };
+	uint32_t allocated[2] = { 0, 0 };
 
 	/* EXERCISE: Your code here */
-	return -EIO; // Replace this line
+	if (0 < next_block && next_block <= OSPFS_NDIRECT) {
+		if (_add_block(&oi->oi_direct[next_block - 1])) {
+			retval = 0;
+		}
+		goto out;
+	}
+
+	// The block to be allocated has to be in indirect or indirect2
+	next_block -= OSPFS_NDIRECT;
+	if (0 < next_block && next_block <= OSPFS_NINDIRECT) {
+		if (!oi->oi_indirect) {
+			if (!(allocated[0] = _add_block(&oi->oi_indirect))) {
+				goto out;
+			}
+		}
+
+		ptr = ospfs_block(oi->oi_indirect);
+		if (!_add_block(&ptr[next_block - 1])) {
+			if (allocated[0]) {
+				free_block(allocated[0]);
+				oi->oi_indirect = 0;
+			}
+			goto out;
+		}
+		retval = 0;
+		goto out;
+	}
+
+	// next block must lie in indirect2
+	next_block -= OSPFS_NINDIRECT;
+	if (0 < next_block && next_block <= (OSPFS_NINDIRECT * OSPFS_NINDIRECT)) {
+		uint32_t level1 = (next_block - 1) / OSPFS_NINDIRECT;
+		uint32_t level2 = (next_block - 1) % OSPFS_NINDIRECT;
+		if (!oi->oi_indirect2) {
+			if (!(allocated[0] = _add_block(&oi->oi_indirect2))) {
+				goto out;
+			}
+		}
+
+		ptr = ospfs_block(oi->oi_indirect2);
+		if (!ptr[level1]) {
+			if (!(allocated[1] = _add_block(&ptr[level1]))) {
+				if (allocated[0]) {
+					free_block(allocated[0]);
+					oi->oi_indirect2 = 0;
+				}
+				goto out;
+			}
+		}
+
+		ptr = ospfs_block(level1);
+		if (!ptr[level2]) {
+			if (!_add_block(&ptr[level2])) {
+				if (allocated[0]) {
+					free_block(allocated[0]);
+					oi->oi_indirect2 = 0;
+				}
+				if (allocated[1]) {
+					free_block(allocated[1]);
+					((uint32_t *) ospfs_block(allocated[1]))
+						[level1] = 0;
+				}
+				goto out;
+			}
+			retval = 0;
+			goto out;
+		}	
+	}
+ out:
+	return retval;
 }
 
 
@@ -941,6 +1037,8 @@ ospfs_write(struct file *filp, const char __user *buffer, size_t count, loff_t *
 	int retval = 0;
 	size_t amount = 0;
 
+	my_eprintk("write: count = %d, pos = %d, append=%d\n",
+		   count, (int) (*f_pos), filp->f_flags & O_APPEND);
 	// Support files opened with the O_APPEND flag.  To detect O_APPEND,
 	// use struct file's f_flags field and the O_APPEND bit.
 	/* EXERCISE: Your code here */
