@@ -363,7 +363,8 @@ ospfs_dir_lookup(struct inode *dir, struct dentry *dentry, struct nameidata *ign
 	struct inode *entry_inode = NULL;
 	int entry_off;
 
-	my_eprintk("ospfs_dir_lookup::start\n");
+	my_eprintk("ospfs_dir_lookup::lookup on ino %d:%s\n",
+		   dir->i_ino, dentry->d_name.name);
 	// Make sure filename is not too long
 	if (dentry->d_name.len > OSPFS_MAXNAMELEN)
 		return (struct dentry *) ERR_PTR(-ENAMETOOLONG);
@@ -376,7 +377,11 @@ ospfs_dir_lookup(struct inode *dir, struct dentry *dentry, struct nameidata *ign
 	     entry_off += OSPFS_DIRENTRY_SIZE) {
 		// Find the OSPFS inode for the entry
 		ospfs_direntry_t *od = ospfs_inode_data(dir_oi, entry_off);
-
+		ospfs_inode_t *dentry_inode = ospfs_inode(od->od_ino);
+		if (od->od_ino > 0) {
+			my_eprintk("%d:%s:%d\n", od->od_ino, od->od_name,
+				   dentry_inode->oi_size);
+		}
 		// Set 'entry_inode' if we find the file we are looking for
 		if (od->od_ino > 0
 		    && strlen(od->od_name) == dentry->d_name.len
@@ -397,7 +402,8 @@ ospfs_dir_lookup(struct inode *dir, struct dentry *dentry, struct nameidata *ign
 	if ((dentry = d_splice_alias(entry_inode, dentry)))
 		dentry->d_op = &ospfs_dentry_ops;
 
-	my_eprintk("ospfs_dir_lookup: dentry is \n", dentry ? "not NULL" : "NULL");
+	my_eprintk("ospfs_dir_lookup: dentry is %s\n",
+		   (dentry == NULL) ? "NULL" : "Not NULL");
 	return dentry;
 }
 
@@ -441,8 +447,10 @@ ospfs_dir_readdir(struct file *filp, void *dirent, filldir_t filldir)
 	uint32_t f_pos = filp->f_pos;
 	int r = 0;		/* Error return value, if any */
 	int ok_so_far = 0;	/* Return value from 'filldir' */
+	int entry_off;
 
-	my_eprintk("ospfs_dir_readdir: start\n");
+	my_eprintk("ospfs_dir_readdir: %d, f_pos=%d\n",
+		   dir_inode->i_ino, f_pos);
 	// f_pos is an offset into the directory's data, plus two.
 	// The "plus two" is to account for "." and "..".
 	if (r == 0 && f_pos == 0) {
@@ -457,7 +465,7 @@ ospfs_dir_readdir(struct file *filp, void *dirent, filldir_t filldir)
 			f_pos++;
 	}
 
-	// actual entries
+	entry_off = (f_pos - 2) * OSPFS_DIRENTRY_SIZE;
 	while (r == 0 && ok_so_far >= 0 && f_pos >= 2) {
 		ospfs_direntry_t *od;
 		ospfs_inode_t *entry_oi;
@@ -466,9 +474,12 @@ ospfs_dir_readdir(struct file *filp, void *dirent, filldir_t filldir)
 		 * the loop.  For now we do this all the time.
 		 *
 		 * EXERCISE: Your code here */
-		r = 1;		/* Fix me! */
-		break;		/* Fix me! */
-
+		if (od->od_ino <= 0 || entry_off >= dir_oi->oi_size) {
+			r = 1;
+			break;
+		}
+		od = ospfs_inode_data(dir_oi, entry_off);
+		entry_oi = ospfs_inode(od->od_ino);
 		/* Get a pointer to the next entry (od) in the directory.
 		 * The file system interprets the contents of a
 		 * directory-file as a sequence of ospfs_direntry structures.
@@ -490,10 +501,20 @@ ospfs_dir_readdir(struct file *filp, void *dirent, filldir_t filldir)
 		 */
 
 		/* EXERCISE: Your code here */
+		my_eprintk("filldir params: name = %s, len = %d, pos = %d, ino = %d\n",
+			   od->od_name, strlen(od->od_name), f_pos, od->od_ino);
+		ok_so_far = filldir(dirent, od->od_name, strlen(od->od_name),
+				    f_pos, od->od_ino,
+				    entry_oi->oi_ftype == DT_REG ? DT_REG : DT_DIR);
+		if (ok_so_far >= 0)
+			f_pos++;
+
+		entry_off += OSPFS_DIRENTRY_SIZE;
 	}
 
 	// Save the file position and return!
 	filp->f_pos = f_pos;
+	my_eprintk("r = %d\n", r);
 	return r;
 }
 
