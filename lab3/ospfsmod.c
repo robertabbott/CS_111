@@ -891,18 +891,35 @@ change_size(ospfs_inode_t *oi, uint32_t new_size)
 	uint32_t old_size = oi->oi_size;
 	int r = 0;
 
-	while (ospfs_size2nblocks(oi->oi_size) < ospfs_size2nblocks(new_size)) {
-	        /* EXERCISE: Your code here */
-		return -EIO; // Replace this line
+	/* EXERCISE: Your code here */
+	if (old_size < new_size) {
+		while (ospfs_size2nblocks(oi->oi_size) <
+		       ospfs_size2nblocks(new_size)) {
+			if ((r = add_block(oi))) {
+				break;
+			}
+			oi->oi_size = (ospfs_size2nblocks(oi->oi_size) + 1) *
+				OSPFS_BLKSIZE;
+		}
+		if (ospfs_size2nblocks(oi->oi_size) == ospfs_size2nblocks(new_size)) {
+			oi->oi_size = new_size;
+			goto out;
+		}
+		while (ospfs_size2nblocks(old_size) !=
+		       ospfs_size2nblocks(oi->oi_size)) {
+			remove_block(oi);
+			oi->oi_size = (ospfs_size2nblocks(oi->oi_size) - 1) *
+				OSPFS_BLKSIZE;
+		}
+		oi->oi_size = old_size;
+	} else if (old_size > new_size) {
+		while (ospfs_size2nblocks(old_size) > ospfs_size2nblocks(new_size)) {
+			/* EXERCISE: Your code here */
+			return -EIO; // Replace this line
+		}
 	}
-	while (ospfs_size2nblocks(oi->oi_size) > ospfs_size2nblocks(new_size)) {
-	        /* EXERCISE: Your code here */
-		return -EIO; // Replace this line
-	}
-
-	/* EXERCISE: Make sure you update necessary file meta data
-	             and return the proper value. */
-	return -EIO; // Replace this line
+ out:
+	return r;
 }
 
 
@@ -919,6 +936,7 @@ ospfs_notify_change(struct dentry *dentry, struct iattr *attr)
 	ospfs_inode_t *oi = ospfs_inode(inode->i_ino);
 	int retval = 0;
 
+	my_eprintk("ospfs_notify_change\n");
 	if (attr->ia_valid & ATTR_SIZE) {
 		// We should not be able to change directory size
 		if (oi->oi_ftype == OSPFS_FTYPE_DIR)
@@ -1035,22 +1053,29 @@ ospfs_write(struct file *filp, const char __user *buffer, size_t count, loff_t *
 {
 	ospfs_inode_t *oi = ospfs_inode(filp->f_dentry->d_inode->i_ino);
 	int retval = 0;
+	int pos = (int) *f_pos;
 	size_t amount = 0;
+	size_t size = oi->oi_size;
 
-	my_eprintk("write: count = %d, pos = %d, append=%d\n",
-		   count, (int) (*f_pos), filp->f_flags & O_APPEND);
+	my_eprintk("write: size = %d, count = %d, pos = %d, append=%d\n",
+		   oi->oi_size, count, (int) (*f_pos), filp->f_flags & O_APPEND);
 	// Support files opened with the O_APPEND flag.  To detect O_APPEND,
 	// use struct file's f_flags field and the O_APPEND bit.
 	/* EXERCISE: Your code here */
+	if (filp->f_flags & O_APPEND) {
+		pos = (int) (*f_pos) + oi->oi_size;
+		size = pos + count;
+	}
 
 	// If the user is writing past the end of the file, change the file's
 	// size to accomodate the request.  (Use change_size().)
 	/* EXERCISE: Your code here */
+	change_size(oi, size);
 
 	// Copy data block by block
 	while (amount < count && retval >= 0) {
-		uint32_t blockno = ospfs_inode_blockno(oi, *f_pos);
-		uint32_t n;
+		uint32_t blockno = ospfs_inode_blockno(oi, pos);
+		uint32_t nbytes;
 		char *data;
 
 		if (blockno == 0) {
@@ -1065,16 +1090,23 @@ ospfs_write(struct file *filp, const char __user *buffer, size_t count, loff_t *
 		// read user space.
 		// Keep track of the number of bytes moved in 'n'.
 		/* EXERCISE: Your code here */
-		retval = -EIO; // Replace these lines
-		goto done;
 
-		buffer += n;
-		amount += n;
-		*f_pos += n;
+		if (pos % OSPFS_BLKSIZE) {
+			nbytes = OSPFS_BLKSIZE - (pos % OSPFS_BLKSIZE);
+		} else {
+			nbytes = OSPFS_BLKSIZE;
+		}
+		if (copy_from_user(((char *) data) + OSPFS_BLKSIZE - nbytes,
+				   buffer, nbytes)) {
+			return -EFAULT;
+		}
+		buffer += nbytes;
+		amount += nbytes;
+		pos += nbytes;
 	}
 
-    done:
-	return (retval >= 0 ? amount : retval);
+ done:
+	return count;
 }
 
 
