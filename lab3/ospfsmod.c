@@ -30,7 +30,7 @@
  * kernel does not print all messages to the console.  Levels like KERN_ALERT
  * and KERN_EMERG will make sure that you will see messages.) */
 #define eprintk(format, ...) printk(KERN_NOTICE format, ## __VA_ARGS__)
-#define DEBUG 0
+#define DEBUG 1
 #define my_eprintk(format, ...) do {					\
 		if (DEBUG) {						\
 			eprintk(format, ## __VA_ARGS__);	\
@@ -174,6 +174,28 @@ ospfs_inode(ino_t ino)
 	return &oi[ino];
 }
 
+
+// Returns a currently free ino number
+static uint32_t
+ospfs_find_free_ino()
+{
+	uint32_t entry;
+	uint32_t ino_count = 0;
+	uint32_t counter;
+	uint32_t blockno = ospfs_super->os_firstinob;
+
+	while (ino_count < ospfs_super->os_ninodes) {
+		ospfs_inode_t *ino_ptr = ospfs_block(blockno);
+		for (counter = 0; counter < OSPFS_BLKINODES;
+		     ino_count++, counter++) {
+			if (ino_ptr[counter].oi_nlink == 0) {
+				return ino_count;
+			}
+		}
+		blockno += 1;
+	}
+	return 0;
+}
 
 // ospfs_inode_blockno(oi, offset)
 //	Use this function to look up the blocks that are part of a file's
@@ -1058,8 +1080,9 @@ ospfs_read(struct file *filp, char __user *buffer, size_t count, loff_t *f_pos)
 	} else {
 		amount = count;
 	}
-	my_eprintk("read:: amount requested = %d, pos = %d, count = %d, size = %d\n",
-		   amount, pos, count, oi->oi_size);
+
+	/* my_eprintk("read:: amount requested = %d, pos = %d, count = %d, size = %d\n", */
+	/* 	   amount, pos, count, oi->oi_size); */
 
 	// Copy the data to user block by block
 	while (amount > 0 && retval >= 0) {
@@ -1070,7 +1093,6 @@ ospfs_read(struct file *filp, char __user *buffer, size_t count, loff_t *f_pos)
 
 		// ospfs_inode_blockno returns 0 on error
 		if (blockno == 0) {
-			my_eprintk("blockno is zero, pos = %d\n", pos);
 			retval = -EIO;
 			goto done;
 		}
@@ -1094,8 +1116,8 @@ ospfs_read(struct file *filp, char __user *buffer, size_t count, loff_t *f_pos)
 			nbytes = nbytes - ((x + nbytes) % OSPFS_BLKSIZE);
 		}
 			
-		my_eprintk("read:pos = %d, nbytes = %d, amount = %d\n",
-			   pos, nbytes, amount);
+		/* my_eprintk("read:pos = %d, nbytes = %d, amount = %d\n", */
+		/* 	   pos, nbytes, amount); */
 
 		if (copy_to_user(buffer, ((char *) data) + x, nbytes)) {
 			return -EFAULT;
@@ -1137,8 +1159,9 @@ ospfs_write(struct file *filp, const char __user *buffer, size_t count, loff_t *
 	size_t amount = 0;
 	size_t size = oi->oi_size;
 
-	my_eprintk("write: size = %d, count = %d, pos = %d, append=%d\n",
-		   oi->oi_size, count, (int) (*f_pos), filp->f_flags & O_APPEND);
+	/* my_eprintk("write: size = %d, count = %d, pos = %d, append=%d\n", */
+	/* 	   oi->oi_size, count, (int) (*f_pos), filp->f_flags & O_APPEND); */
+
 	// Support files opened with the O_APPEND flag.  To detect O_APPEND,
 	// use struct file's f_flags field and the O_APPEND bit.
 	/* EXERCISE: Your code here */
@@ -1258,6 +1281,11 @@ find_direntry(ospfs_inode_t *dir_oi, const char *name, int namelen)
 static ospfs_direntry_t *
 create_blank_direntry(ospfs_inode_t *dir_oi)
 {
+	uint32_t blockno;
+	uint32_t off = 1;
+	int ret;
+	uint32_t entry_off;
+
 	// Outline:
 	// 1. Check the existing directory data for an empty entry.  Return one
 	//    if you find it.
@@ -1266,7 +1294,21 @@ create_blank_direntry(ospfs_inode_t *dir_oi)
 	//    entries and return one of them.
 
 	/* EXERCISE: Your code here. */
-	return ERR_PTR(-EINVAL); // Replace this line
+	// Search through the directory block
+	for (entry_off = 0; entry_off < dir_oi->oi_size;
+	     entry_off += OSPFS_DIRENTRY_SIZE) {
+		// Find the OSPFS inode for the entry
+		ospfs_direntry_t *od = ospfs_inode_data(dir_oi, entry_off);
+
+		// Set 'entry_inode' if we find the file we are looking for
+		if (od->od_ino == 0) {
+			return od;
+		}
+	}
+	if ((ret = change_size(dir_oi, dir_oi->oi_size + OSPFS_DIRENTRY_SIZE))) {
+		return ERR_PTR(ret);
+	}
+	return create_blank_direntry(dir_oi);
 }
 
 // ospfs_link(src_dentry, dir, dst_dentry
@@ -1337,10 +1379,34 @@ static int
 ospfs_create(struct inode *dir, struct dentry *dentry, int mode, struct nameidata *nd)
 {
 	ospfs_inode_t *dir_oi = ospfs_inode(dir->i_ino);
+	ospfs_direntry_t *file_od;
+	ospfs_inode_t *file_oi = NULL;
 	uint32_t entry_ino = 0;
-	my_eprintk("ospfs_create:: start\n");
-	/* EXERCISE: Your code here. */
-	return -EINVAL; // Replace this line
+
+	if (dentry->d_name.len >= OSPFS_MAXNAMELEN) {
+		return -ENAMETOOLONG;
+	} else if (find_direntry(dir_oi, dentry->d_name.name, dentry->d_name.len)) {
+		return -EEXIST;
+	}
+
+	entry_ino = ospfs_find_free_ino();
+	if (entry_ino == 0) {
+		return -ENOSPC;
+	}
+
+	file_od = create_blank_direntry(dir_oi);
+	if (IS_ERR(file_od)) {
+		return -ENOSPC;
+	}
+
+	file_od->od_ino = entry_ino;
+	memcpy(file_od->od_name, dentry->d_name.name, dentry->d_name.len);
+
+	file_oi = ospfs_inode(entry_ino);
+	file_oi->oi_size = 0;
+	file_oi->oi_ftype = OSPFS_FTYPE_REG;
+	file_oi->oi_nlink = 1;
+	file_oi->oi_mode = mode;
 
 	/* Execute this code after your function has successfully created the
 	   file.  Set entry_ino to the created file's inode number before
