@@ -30,7 +30,7 @@
  * kernel does not print all messages to the console.  Levels like KERN_ALERT
  * and KERN_EMERG will make sure that you will see messages.) */
 #define eprintk(format, ...) printk(KERN_NOTICE format, ## __VA_ARGS__)
-#define DEBUG 1
+#define DEBUG 0
 #define my_eprintk(format, ...) do {					\
 		if (DEBUG) {						\
 			eprintk(format, ## __VA_ARGS__);	\
@@ -1143,21 +1143,24 @@ ospfs_write(struct file *filp, const char __user *buffer, size_t count, loff_t *
 	// use struct file's f_flags field and the O_APPEND bit.
 	/* EXERCISE: Your code here */
 	if (filp->f_flags & O_APPEND) {
-		pos = (int) (*f_pos) + oi->oi_size;
+		pos = pos + oi->oi_size;
 		size = pos + count;
 	} else {
-		size = (int) (*f_pos) + oi->oi_size;
+		size = (pos + count) > size ? (pos + count) : size;
 	}
+
 	// If the user is writing past the end of the file, change the file's
 	// size to accomodate the request.  (Use change_size().)
 	/* EXERCISE: Your code here */
 	change_size(oi, size);
 
+	amount = count;
 	// Copy data block by block
-	while (amount < count && retval >= 0) {
+	while (amount > 0 && retval >= 0) {
 		uint32_t blockno = ospfs_inode_blockno(oi, pos);
 		uint32_t nbytes;
 		char *data;
+		uint32_t x = pos % OSPFS_BLKSIZE;
 
 		if (blockno == 0) {
 			retval = -EIO;
@@ -1171,21 +1174,26 @@ ospfs_write(struct file *filp, const char __user *buffer, size_t count, loff_t *
 		// read user space.
 		// Keep track of the number of bytes moved in 'n'.
 		/* EXERCISE: Your code here */
-
-		if (pos % OSPFS_BLKSIZE) {
-			nbytes = OSPFS_BLKSIZE - (pos % OSPFS_BLKSIZE);
-		} else {
+		if (amount >= OSPFS_BLKSIZE) {
 			nbytes = OSPFS_BLKSIZE;
+		} else {
+			nbytes = amount;
 		}
 
-		if (copy_from_user(((char *) data) + OSPFS_BLKSIZE - nbytes,
-				   buffer, nbytes)) {
+		if (nbytes == OSPFS_BLKSIZE) {
+			nbytes -= x;
+		} else if ((nbytes + x) > OSPFS_BLKSIZE) {
+			nbytes = nbytes - ((x + nbytes) % OSPFS_BLKSIZE);
+		}
+
+		if (copy_from_user(data + x, buffer, nbytes)) {
 			return -EFAULT;
 		}
 		buffer += nbytes;
-		amount += nbytes;
+		amount -= nbytes;
 		pos += nbytes;
 	}
+	*f_pos += (loff_t) count;
  done:
 	return count;
 }
