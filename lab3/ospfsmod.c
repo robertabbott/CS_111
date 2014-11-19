@@ -512,8 +512,6 @@ ospfs_dir_readdir(struct file *filp, void *dirent, filldir_t filldir)
 		 */
 
 		/* EXERCISE: Your code here */
-		my_eprintk("readdir: (ino::name:size::%d::%s:%d)\n",
-			   od->od_ino, od->od_name, oi->oi_size);
 		ok_so_far = filldir(dirent, od->od_name,
 				    strlen(od->od_name),
 				    f_pos, od->od_ino,
@@ -1343,7 +1341,28 @@ create_blank_direntry(ospfs_inode_t *dir_oi)
 static int
 ospfs_link(struct dentry *src_dentry, struct inode *dir, struct dentry *dst_dentry) {
 	/* EXERCISE: Your code here. */
-	return -EINVAL;
+        ospfs_inode_t *dir_oi = ospfs_inode(dir->i_ino);
+        ospfs_inode_t *file_oi = ospfs_inode(src_dentry->d_inode->i_ino);
+        ospfs_direntry_t *file_od = NULL;
+        uint32_t entry_ino = src_dentry->d_inode->i_ino;
+
+
+        if (dst_dentry->d_name.len >= OSPFS_MAXNAMELEN) {
+                return -ENAMETOOLONG;
+        } else if (find_direntry(dir_oi, dst_dentry->d_name.name,
+                                dst_dentry->d_name.len)) {
+                return -EEXIST;
+        }
+
+        file_od = create_blank_direntry(dir_oi);
+        if (IS_ERR(file_od)) {
+                return -ENOSPC;
+        }
+        file_od->od_ino = entry_ino;
+        memcpy(file_od->od_name, dst_dentry->d_name.name, dst_dentry->d_name.len);
+        file_oi->oi_nlink += 1;
+
+        return 0;
 }
 
 // ospfs_create
