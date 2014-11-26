@@ -7,10 +7,14 @@
 #include <inttypes.h>
 #include "ospfs-fsck.h"
 
+static int ninodeblklength;
+static uint8_t *bitmap;
+static uint8_t *inodeTable;
+int nblocks, ninodes, firstinoblock;
+
 void initialize()
 {
 	int i = 0;
-	int nblocks, ninodes, firstinoblock;
 	uint8_t *ptr;
 	int fd = open("fs.img", O_RDONLY);
 
@@ -44,19 +48,55 @@ void initialize()
 		i++;
 	}
 
+	ninodeblklength = ninodes * OSPFS_INODESIZE;
+	bitmap = calloc(OSPFS_BLKSIZE, sizeof(uint8_t));
+	inodeTable = calloc(ninodeblklength, sizeof(uint8_t));
+
+	// mark reserved blocks in bitmap
 	ospfs_fill_super();
+}
+
+
+int
+traverse(uint32_t i_ino)
+{
+	int pos = 0;
+	ospfs_direntry_t *od;
+
+	copy_inode(i_ino, bitmap, inodeTable);
+
+	if (!is_dir(i_ino)) {
+		return 0;
+	} else {
+		fprintf(stdout, "Traversing %d\n", i_ino);
+	}
+
+	while(ospfs_dir_readdir(i_ino, &pos, &od) != -1) {
+		printf ("%d: %s\n", od->od_ino, od->od_name);
+		traverse(od->od_ino);
+	}
+}
+
+void
+build_information()
+{
+	int i;
+	ospfs_inode_t *oi = (ospfs_inode_t *) inodeTable;
+	memcpy(&oi[0], ospfs_inode(0), sizeof(*oi));
+	traverse(1);
+	for (i = 0; i < ninodes; i++) {
+		if (memcmp(&oi[i], ospfs_inode(i), sizeof(*oi))) {
+			fprintf(stderr, "inode cmp failed for %d ino\n", i);
+		}
+	}
 }
 
 int
 main ()
 {
-	int pos = 0;
-	ospfs_direntry_t *od;
-
 	initialize();
 
-	while(ospfs_dir_readdir(1, &pos, &od) != -1) {
-		printf ("%d: %s\n", od->od_ino, od->od_name);
-	}
+	build_information();
+
 	return 0;
 }

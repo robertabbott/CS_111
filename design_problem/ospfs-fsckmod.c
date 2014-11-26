@@ -133,7 +133,7 @@ ospfs_block(uint32_t blockno)
 //   Input:   ino -- inode number
 //   Returns: a pointer to the corresponding ospfs_inode structure
 
-static inline ospfs_inode_t *
+inline ospfs_inode_t *
 ospfs_inode(uint32_t ino)
 {
 	ospfs_inode_t *oi;
@@ -830,4 +830,25 @@ int ospfs_fill_super()
 {
 	ospfs_super = (ospfs_super_t *) &ospfs_data[OSPFS_BLKSIZE];
         return 0;
+}
+
+int copy_inode(uint32_t i_ino, uint8_t *bitmap, ospfs_inode_t *inodeTable)
+{
+	memcpy(&inodeTable[i_ino], ospfs_inode(i_ino), sizeof(*inodeTable));
+}
+
+int
+is_reg(uint32_t i_ino)
+{
+	ospfs_inode_t *oi = ospfs_inode(i_ino);
+
+	return oi->oi_ftype == OSPFS_FTYPE_REG ? 1 : 0;
+}
+
+int
+is_dir(uint32_t i_ino)
+{
+	ospfs_inode_t *oi = ospfs_inode(i_ino);
+
+	return oi->oi_ftype == OSPFS_FTYPE_DIR ? 1 : 0;
 }

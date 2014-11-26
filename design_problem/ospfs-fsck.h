@@ -203,4 +203,12 @@ uint32_t ospfs_length;
 int ospfs_dir_readdir(uint32_t i_ino, int *pos, ospfs_direntry_t **_od);
 
 int ospfs_fill_super();
+
+int is_reg(uint32_t i_ino);
+
+int is_dir(uint32_t i_ino);
+
+ospfs_inode_t* ospfs_inode(uint32_t);
+
+int copy_inode(uint32_t i_ino, uint8_t *bitmap, ospfs_inode_t *inodeTable);
 #endif
