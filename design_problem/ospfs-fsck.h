@@ -1,6 +1,10 @@
 #ifndef OSPFS_H
 #define OSPFS_H
 // OSPFS Constants and Structure Definitions
+#include <stdio.h>
+#include <inttypes.h>
+#include <string.h>
+#include <errno.h>
 
 /*****************************************************************************
  * BLOCKS

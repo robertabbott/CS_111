@@ -16,9 +16,15 @@ main ()
 	int i = 0;
 	int nblocks, ninodes, firstinoblock;
 
-	int fd = open("fs.img", O_RDONLY);
+	int fd = open("fs.img", O_RDWR);
 
 	lseek(fd, OSPFS_BLKSIZE + 4, SEEK_SET);
+
+	//**************************
+	nblocks = 4;
+	write(fd, &nblocks, 4);
+	lseek(fd, -4, SEEK_CUR);
+	//**************************
 
 	read(fd, &nblocks, 4);
 	read(fd, &ninodes, 4);
