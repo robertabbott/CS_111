@@ -197,4 +197,10 @@ typedef struct ospfs_direntry {
 	char od_name[OSPFS_MAXNAMELEN + 1];	// File name
 } ospfs_direntry_t;
 
+uint8_t *ospfs_data;
+uint32_t ospfs_length;
+
+int ospfs_dir_readdir(uint32_t i_ino, int *pos, ospfs_direntry_t **_od);
+
+int ospfs_fill_super();
 #endif

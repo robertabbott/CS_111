@@ -24,12 +24,11 @@
 
 // The actual disk data is just an array of raw memory.
 // The initial array is defined in fsimg.c, based on your 'base' directory.
-extern uint8_t ospfs_data[];
-extern uint32_t ospfs_length;
+//extern uint8_t ospfs_data[];
+//extern uint32_t ospfs_length;
 
 // A pointer to the superblock; see ospfs.h for details on the struct.
-static ospfs_super_t * const ospfs_super =
-	(ospfs_super_t *) &ospfs_data[OSPFS_BLKSIZE];
+static ospfs_super_t *ospfs_super;
 
 static int change_size(ospfs_inode_t *oi, uint32_t want_size);
 static ospfs_direntry_t *find_direntry(ospfs_inode_t *dir_oi, const char *name, int namelen);
@@ -246,8 +245,8 @@ ospfs_inode_data(ospfs_inode_t *oi, uint32_t offset)
 //
 //   EXERCISE: Finish implementing this function.
 
-static int
-ospfs_dir_readdir(uint32_t i_ino, int *pos)
+int
+ospfs_dir_readdir(uint32_t i_ino, int *pos, ospfs_direntry_t **_od)
 {
 	ospfs_inode_t *dir_oi = ospfs_inode(i_ino);
 	uint32_t f_pos = *pos;
@@ -264,9 +263,11 @@ ospfs_dir_readdir(uint32_t i_ino, int *pos)
 		 */
 		if (od->od_ino <= 0) {
 			r = -1;
+			*_od = NULL;
 		} else {
-			r = od->od_ino;
+			r = 0;
 			f_pos++;
+			*_od = od;
 		}
 	}
 
@@ -823,4 +824,10 @@ ospfs_create(int i_ino, char *d_name, int mode)
 	file_oi->oi_ftype = OSPFS_FTYPE_REG;
 	file_oi->oi_nlink = 1;
 	file_oi->oi_mode = mode;
+}
+
+int ospfs_fill_super()
+{
+	ospfs_super = (ospfs_super_t *) &ospfs_data[OSPFS_BLKSIZE];
+        return 0;
 }
