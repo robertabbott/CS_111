@@ -210,5 +210,18 @@ int is_dir(uint32_t i_ino);
 
 ospfs_inode_t* ospfs_inode(uint32_t);
 
+inline void
+bitvector_set(void *vector, int i);
+
+// bitvector_clear -- Set 'i'th bit of 'vector' to 0.
+inline void
+bitvector_clear(void *vector, int i);
+
+// bitvector_test -- Return the value of the 'i'th bit of 'vector'.
+inline int
+bitvector_test(const void *vector, int i);
+
+void * ospfs_block(uint32_t blockno);
+
 int copy_inode(uint32_t i_ino, uint8_t *bitmap, ospfs_inode_t *inodeTable);
 #endif

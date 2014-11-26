@@ -75,21 +75,21 @@ static ospfs_direntry_t *find_direntry(ospfs_inode_t *dir_oi, const char *name, 
  */
 
 // bitvector_set -- Set 'i'th bit of 'vector' to 1.
-static inline void
+inline void
 bitvector_set(void *vector, int i)
 {
 	((uint32_t *) vector) [i / 32] |= (1 << (i % 32));
 }
 
 // bitvector_clear -- Set 'i'th bit of 'vector' to 0.
-static inline void
+inline void
 bitvector_clear(void *vector, int i)
 {
 	((uint32_t *) vector) [i / 32] &= ~(1 << (i % 32));
 }
 
 // bitvector_test -- Return the value of the 'i'th bit of 'vector'.
-static inline int
+inline int
 bitvector_test(const void *vector, int i)
 {
 	return (((const uint32_t *) vector) [i / 32] & (1 << (i % 32))) != 0;
@@ -120,7 +120,7 @@ ospfs_size2nblocks(uint32_t size)
 //   Input:   blockno -- block number
 //   Returns: a pointer to that block's data
 
-static void *
+void *
 ospfs_block(uint32_t blockno)
 {
 	return &ospfs_data[blockno * OSPFS_BLKSIZE];
@@ -832,9 +832,59 @@ int ospfs_fill_super()
         return 0;
 }
 
-int copy_inode(uint32_t i_ino, uint8_t *bitmap, ospfs_inode_t *inodeTable)
+int
+mark_inode_bitmap(ospfs_inode_t *oi, uint8_t *bitmap)
+{
+	int i, j;
+	uint32_t *ptrl1, *ptrl2;
+	int next_block = ospfs_size2nblocks(oi->oi_size);
+
+	if (next_block == 0) {
+		return 0;
+	}
+
+	for (i = 0; (i < OSPFS_NDIRECT) && oi->oi_direct[i]; i++) {
+		bitvector_clear(bitmap, oi->oi_direct[i]);
+	}
+
+	if (i < OSPFS_NDIRECT || !oi->oi_indirect) {
+		return 0;
+	}
+
+	next_block -= OSPFS_NDIRECT;
+	bitvector_clear(bitmap, oi->oi_indirect);
+	ptrl1 = ospfs_block(oi->oi_indirect);
+	for (i = 0; i < OSPFS_NINDIRECT && ptrl1[i]; i++) {
+		bitvector_clear(bitmap, ptrl1[i]);
+	}
+
+	if (i < OSPFS_NINDIRECT || !oi->oi_indirect2) {
+		return 0;
+	}
+
+	next_block -= OSPFS_NINDIRECT;
+	bitvector_clear(bitmap, oi->oi_indirect2);
+	ptrl1 = ospfs_block(oi->oi_indirect);
+	for (i = 0; i < OSPFS_NINDIRECT && ptrl1[i]; i++) {
+		ptrl2 = ospfs_block(ptrl1[i]);
+		bitvector_clear(bitmap, ptrl1[i]);
+		for (j = 0; j < OSPFS_NINDIRECT && ptrl2[j]; j++) {
+			bitvector_clear(bitmap, ptrl2[j]);
+		}
+		if (j < OSPFS_NINDIRECT) {
+			break;
+		}
+	}
+
+	return 0;
+}
+
+int32_t
+copy_inode(uint32_t i_ino, uint8_t *bitmap, ospfs_inode_t *inodeTable)
 {
 	memcpy(&inodeTable[i_ino], ospfs_inode(i_ino), sizeof(*inodeTable));
+
+	mark_inode_bitmap(ospfs_inode(i_ino), bitmap);
 }
 
 int

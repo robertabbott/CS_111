@@ -53,6 +53,14 @@ void initialize()
 	inodeTable = calloc(ninodeblklength, sizeof(uint8_t));
 
 	// mark reserved blocks in bitmap
+	for (i = 0; i < OSPFS_BLKSIZE; i++) {
+		bitmap[i] = -1;
+	}
+
+	for (i = 0; i < (3 + ninodeblklength / OSPFS_BLKSIZE); i++) {
+		bitvector_clear(bitmap, i);
+	}
+
 	ospfs_fill_super();
 }
 
@@ -81,12 +89,21 @@ void
 build_information()
 {
 	int i;
+	uint8_t *ptr = (uint8_t *) ospfs_block(OSPFS_FREEMAP_BLK);
 	ospfs_inode_t *oi = (ospfs_inode_t *) inodeTable;
+
 	memcpy(&oi[0], ospfs_inode(0), sizeof(*oi));
 	traverse(1);
 	for (i = 0; i < ninodes; i++) {
 		if (memcmp(&oi[i], ospfs_inode(i), sizeof(*oi))) {
 			fprintf(stderr, "inode cmp failed for %d ino\n", i);
+		}
+	}
+
+	for (i = 0; i < nblocks / 8; i++) {
+		if (bitmap[i] != ptr[i]) {
+			fprintf(stdout, "i = %d, bitmap = %0x, ptr = %0x\n",
+				i, bitmap[i], ptr[i]);
 		}
 	}
 }
