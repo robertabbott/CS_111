@@ -29,7 +29,7 @@ read_data(int fd, int offset, int length)
 
 	for (i = 0; i < length; i++) {
 		if (i % 20 == 0) {
-			fprintf(stdout, "\n%0x :", i);
+			fprintf(stdout, "\n%d :", offset+i);
 		}
 		fprintf(stdout, "0x%02x ", buffer[i]);
 	}

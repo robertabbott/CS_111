@@ -1,0 +1,11 @@
+OSPFS filesystem checker and fixer.
+
+Compile:
+  Run make to compile the fs checker and fixer.
+   $ make
+
+  To compile the test framework.
+   $ make test
+
+  Run test.sh to run test script.
+   $ ./test.sh

@@ -20,7 +20,7 @@ FSFIXER_OBJECTS = $(subst .c,.o,$(FSFIXER_SOURCES))
 
 DIST_SOURCES = \
   $(FSFIXER_SOURCES) ospfs-fsck.h Makefile \
-  $(TESTS_SOURCES) test.sh README
+  $(TESTS_SOURCES) test.sh README fs.img
 
 test: $(TESTS_OBJECTS)
 	$(CC) $(CFLAGS) -o $@ $(TESTS_OBJECTS)
