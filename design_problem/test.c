@@ -39,6 +39,7 @@ read_data(int fd, int offset, int length)
 void
 write_data(int fd, int offset, uint8_t data)
 {
+	fprintf(stdout, "writing 0x%0x at %d\n", data, offset);
 	lseek(fd, offset, SEEK_SET);
 	write(fd, &data, sizeof(uint8_t));
 }
@@ -69,8 +70,8 @@ main (int argc, char *argv[])
 		break;
 	case 'w':
 		sscanf(argv[2], "%d", &offset);
-		sscanf(argv[3], "%c", &data);
-		write_data(fd, offset, value);
+		sscanf(argv[3], "%"SCNd8"", &data);
+		write_data(fd, offset, data);
 		break;
 	default:
 		usage(argv[0]);

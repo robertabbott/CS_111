@@ -6,17 +6,21 @@
 #include <stdlib.h>
 #include <inttypes.h>
 #include "ospfs-fsck.h"
+#include <string.h>
+#include <errno.h>
 
 static int ninodeblklength;
 static uint8_t *bitmap;
 static uint8_t *inodeTable;
 int nblocks, ninodes, firstinoblock;
+int fd;
 
 void initialize(char *imgfile)
 {
 	int i = 0;
 	uint8_t *ptr;
-	int fd = open(imgfile, O_RDONLY);
+	
+	fd = open(imgfile, O_RDWR);
 
 	lseek(fd, OSPFS_BLKSIZE + 4, SEEK_SET);
 
@@ -71,7 +75,7 @@ traverse(uint32_t i_ino)
 	int pos = 0;
 	ospfs_direntry_t *od;
 
-	copy_inode(i_ino, bitmap, inodeTable);
+	copy_inode(i_ino, bitmap, (ospfs_inode_t *) inodeTable);
 
 	if (!is_dir(i_ino)) {
 		return 0;
@@ -178,7 +182,32 @@ check_and_fix()
 int
 commit()
 {
+	int i = 0;
+	uint8_t *ptr;
+
+	fprintf(stdout, "Committing changes\n");
+
+	memcpy(ospfs_block(OSPFS_FREEMAP_BLK), bitmap, OSPFS_BLKSIZE);
+	memcpy(ospfs_block(firstinoblock), inodeTable, ninodeblklength);
+
+	lseek(fd, 0, SEEK_SET);
+	ptr = ospfs_data;
+	i = 0;
+	while (i < nblocks) {
+		if (write(fd, ptr, OSPFS_BLKSIZE) != OSPFS_BLKSIZE) {
+			fprintf(stderr, "write error: %s\n", strerror(errno));
+			exit(-1);
+		}
+		ptr += OSPFS_BLKSIZE;;
+		i++;
+	}
+	fprintf(stdout, "Committing changes done.\n");
+
+	close(fd);
+	return 0;
 }
+
+
 int
 main (int argc, char *argv[])
 {
