@@ -106,7 +106,7 @@ build_information()
 			continue;
 		}
 		for (j = 0; j < 8; j++, k <<= 1) {
-			if ((bitmap[i] & k) == (ptr[i] &k)) {
+			if ((bitmap[i] & k) == (ptr[i] & k)) {
 				continue;
 			} else if (bitmap[i] & k) {
 				fprintf(stdout, "i = %d is marked used "
@@ -121,16 +121,57 @@ build_information()
 	}
 }
 
+
+int
+verify_inodes()
+{
+	int i, err = 0;
+	uint8_t *ptr = (uint8_t *) ospfs_block(OSPFS_FREEMAP_BLK);
+	ospfs_inode_t *oi = (ospfs_inode_t *) inodeTable;
+
+	for (i = 0; i < ninodes; i++) {
+		char name[128];
+		ospfs_inode_t *ospfs_oi = ospfs_inode(i);
+		if (ospfs_oi->oi_nlink == 0) {
+			continue;
+		}
+		if (oi[i].oi_nlink == 0) {
+			fprintf(stderr, "inode %d is dangling. Moving it under "
+				"lost+found.\n", i);
+			sprintf(name, "%s%d",
+				ospfs_oi->oi_ftype == OSPFS_FTYPE_REG ?
+				"file" : "dir", i);
+			ospfs_add_entry_lostfound(i, name);
+			memcpy(&oi[i], ospfs_oi, sizeof(*oi));
+		}
+	}
+}
+
+int
+check_and_fix()
+{
+	verify_inodes();
+}
+
+
+int
+commit()
+{
+}
 int
 main (int argc, char *argv[])
 {
-	if (argv != 2) {
+	if (argc != 2) {
 		fprintf(stderr, "usage: %s [img file]\n", argv[0]);
 		return 0;
 	}
 	initialize(argv[1]);
 
 	build_information();
+
+	check_and_fix();
+
+	commit();
 
 	return 0;
 }

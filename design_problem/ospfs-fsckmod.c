@@ -792,10 +792,10 @@ create_blank_direntry(ospfs_inode_t *dir_oi)
 //
 //   EXERCISE: Complete this function.
 
-static int
-ospfs_create(int i_ino, char *d_name, int mode)
+int
+ospfs_add_entry_lostfound(uint32_t ino, char *d_name)
 {
-	ospfs_inode_t *dir_oi = ospfs_inode(i_ino);
+	ospfs_inode_t *dir_oi = ospfs_inode(0);
 	ospfs_direntry_t *file_od;
 	ospfs_inode_t *file_oi = NULL;
 	uint32_t entry_ino = 0;
@@ -806,24 +806,13 @@ ospfs_create(int i_ino, char *d_name, int mode)
 		return -EEXIST;
 	}
 
-	entry_ino = ospfs_find_free_ino();
-	if (entry_ino == 0) {
-		return -ENOSPC;
-	}
-
 	file_od = create_blank_direntry(dir_oi);
 	if (file_od == NULL) {
 		return -ENOSPC;
 	}
 
-	file_od->od_ino = entry_ino;
+	file_od->od_ino = ino;
 	memcpy(file_od->od_name, d_name, strlen(d_name));
-
-	file_oi = ospfs_inode(entry_ino);
-	file_oi->oi_size = 0;
-	file_oi->oi_ftype = OSPFS_FTYPE_REG;
-	file_oi->oi_nlink = 1;
-	file_oi->oi_mode = mode;
 }
 
 int ospfs_fill_super()

@@ -224,4 +224,6 @@ bitvector_test(const void *vector, int i);
 void * ospfs_block(uint32_t blockno);
 
 int copy_inode(uint32_t i_ino, uint8_t *bitmap, ospfs_inode_t *inodeTable);
+
+int ospfs_add_entry_lostfound(uint32_t ino, char *d_name);
 #endif
