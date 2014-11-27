@@ -226,4 +226,9 @@ void * ospfs_block(uint32_t blockno);
 int copy_inode(uint32_t i_ino, uint8_t *bitmap, ospfs_inode_t *inodeTable);
 
 int ospfs_add_entry_lostfound(uint32_t ino, char *d_name);
+
+int mark_inode_bitmap(ospfs_inode_t *oi, uint8_t *bitmap);
+
+void * ospfs_block(uint32_t blockno);
+
 #endif

@@ -100,25 +100,6 @@ build_information()
 		}
 	}
 
-	for (i = 0; i < nblocks / 8; i++) {
-		int j, k = 1;
-		if (bitmap[i] == ptr[i]) {
-			continue;
-		}
-		for (j = 0; j < 8; j++, k <<= 1) {
-			if ((bitmap[i] & k) == (ptr[i] & k)) {
-				continue;
-			} else if (bitmap[i] & k) {
-				fprintf(stdout, "i = %d is marked used "
-					"but no inode is using it\n",
-					i * 8 + k);
-			} else {
-				fprintf(stdout, "i = %d is marked free "
-					"but it is used by one of the inodes\n",
-					i * 8 + k);
-			}
-		}
-	}
 }
 
 
@@ -143,6 +124,40 @@ verify_inodes()
 				"file" : "dir", i);
 			ospfs_add_entry_lostfound(i, name);
 			memcpy(&oi[i], ospfs_oi, sizeof(*oi));
+			mark_inode_bitmap(ospfs_oi, bitmap);
+		}
+	}
+}
+
+int
+verify_bitmap()
+{
+	int i, err = 0;
+	uint8_t *ptr = (uint8_t *) ospfs_block(OSPFS_FREEMAP_BLK);
+
+	for (i = 0; i < nblocks / 8; i++) {
+		int j, k = 1;
+		if (bitmap[i] == ptr[i]) {
+			continue;
+		}
+		for (j = 0; j < 8; j++, k <<= 1) {
+			if ((bitmap[i] & k) == (ptr[i] & k)) {
+				continue;
+			} else if (bitmap[i] & k) {
+				fprintf(stdout, "i = %d is marked used "
+					"but no inode is using it\n",
+					i * 8 + k);
+			} else {
+				fprintf(stdout, "i = %d is marked free "
+					"but it is used by one of the inodes\n",
+					i * 8 + k);
+			}
+		}
+	}
+
+	for (i = 0; i < nblocks; i++) {
+		if (bitvector_test(bitmap, i)) {
+			memset(ospfs_block(i), 0, OSPFS_BLKSIZE);
 		}
 	}
 }
@@ -150,7 +165,13 @@ verify_inodes()
 int
 check_and_fix()
 {
+	fprintf(stdout, "Verifying inodes\n");
 	verify_inodes();
+	fprintf(stdout, "Verifying inodes done.\n");
+
+	fprintf(stdout, "Verifying bitmap\n");
+	verify_bitmap();
+	fprintf(stdout, "Verifying bitmap Done.\n");
 }
 
 
