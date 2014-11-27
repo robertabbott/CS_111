@@ -795,7 +795,7 @@ create_blank_direntry(ospfs_inode_t *dir_oi)
 int
 ospfs_add_entry_lostfound(uint32_t ino, char *d_name)
 {
-	ospfs_inode_t *dir_oi = ospfs_inode(0);
+	ospfs_inode_t *dir_oi = ospfs_inode(6);
 	ospfs_direntry_t *file_od;
 	ospfs_inode_t *file_oi = NULL;
 	uint32_t entry_ino = 0;
