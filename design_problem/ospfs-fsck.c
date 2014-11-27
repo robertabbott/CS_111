@@ -88,7 +88,7 @@ traverse(uint32_t i_ino)
 void
 build_information()
 {
-	int i;
+	int i, err = 0;
 	uint8_t *ptr = (uint8_t *) ospfs_block(OSPFS_FREEMAP_BLK);
 	ospfs_inode_t *oi = (ospfs_inode_t *) inodeTable;
 
@@ -101,9 +101,22 @@ build_information()
 	}
 
 	for (i = 0; i < nblocks / 8; i++) {
-		if (bitmap[i] != ptr[i]) {
-			fprintf(stdout, "i = %d, bitmap = %0x, ptr = %0x\n",
-				i, bitmap[i], ptr[i]);
+		int j, k = 1;
+		if (bitmap[i] == ptr[i]) {
+			continue;
+		}
+		for (j = 0; j < 8; j++, k <<= 1) {
+			if ((bitmap[i] & k) == (ptr[i] &k)) {
+				continue;
+			} else if (bitmap[i] & k) {
+				fprintf(stdout, "i = %d is marked used "
+					"but no inode is using it\n",
+					i * 8 + k);
+			} else {
+				fprintf(stdout, "i = %d is marked free "
+					"but it is used by one of the inodes\n",
+					i * 8 + k);
+			}
 		}
 	}
 }
