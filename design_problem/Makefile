@@ -8,9 +8,6 @@ TAR_FLAGS = --numeric-owner --owner=0 --group=0 --mode=go+u,u+w,go-w
 
 all: fsFixer
 
-#TESTS = $(wildcard test*.sh)
-#TEST_BASES = $(subst .sh,,$(TESTS))
-
 FSFIXER_SOURCES = \
   ospfs-fsck.c \
   ospfs-fsckmod.c
