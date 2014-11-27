@@ -8,6 +8,10 @@ TAR_FLAGS = --numeric-owner --owner=0 --group=0 --mode=go+u,u+w,go-w
 
 all: fsFixer
 
+TESTS_SOURCES = test.c
+
+TESTS_OBJECTS = $(subst .c,.o,$(TESTS_SOURCES))
+
 FSFIXER_SOURCES = \
   ospfs-fsck.c \
   ospfs-fsckmod.c
@@ -15,8 +19,11 @@ FSFIXER_SOURCES = \
 FSFIXER_OBJECTS = $(subst .c,.o,$(FSFIXER_SOURCES))
 
 DIST_SOURCES = \
-  $(FSFIXER_SOURCES) ospfs-fsck.h Makefile
-#  $(TESTS) check-dist COPYING README
+  $(FSFIXER_SOURCES) ospfs-fsck.h Makefile \
+  $(TESTS_SOURCES) test.sh README
+
+test: $(TESTS_OBJECTS)
+	$(CC) $(CFLAGS) -o $@ $(TESTS_OBJECTS)
 
 fsFixer: $(FSFIXER_OBJECTS)
 	$(CC) $(CFLAGS) -o $@ $(FSFIXER_OBJECTS)
