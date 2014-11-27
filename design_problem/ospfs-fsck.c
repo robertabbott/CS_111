@@ -12,11 +12,11 @@ static uint8_t *bitmap;
 static uint8_t *inodeTable;
 int nblocks, ninodes, firstinoblock;
 
-void initialize()
+void initialize(char *imgfile)
 {
 	int i = 0;
 	uint8_t *ptr;
-	int fd = open("fs.img", O_RDONLY);
+	int fd = open(imgfile, O_RDONLY);
 
 	lseek(fd, OSPFS_BLKSIZE + 4, SEEK_SET);
 
@@ -122,9 +122,13 @@ build_information()
 }
 
 int
-main ()
+main (int argc, char *argv[])
 {
-	initialize();
+	if (argv != 2) {
+		fprintf(stderr, "usage: %s [img file]\n", argv[0]);
+		return 0;
+	}
+	initialize(argv[1]);
 
 	build_information();
 
