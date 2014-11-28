@@ -1,0 +1,38 @@
+Name: Robert Abbott
+UCLA ID: 004432123
+
+Collaborators: None
+
+-------------------------------------------------------------------------------
+
+Response to Exercise 1:
+Run will execute the 'current' process which guarantees sys_getpid() returns the pid of the current process.
+Schedule will run the first runnable process in the list of processes starting with current+1. Therefore
+if there are runnable processes other than current in the process list, schedule will not return the correct
+pid.
+
+What this essentially means is that INT_SYS_GETPID will only ever return the correct value if it is called by
+the kernel and there are no other running processes. Since sys_getpid will only return the correct value if
+there is only one running process and a process cannot call sys_getpid on itself, schedule will never
+return the correct pid.
+
+
+Response to Exercise 3:
+A 'p_waiting' field was added to the process_t struct. When a process is waiting on another, 'p_waiting' is set to
+the pid of the process being waited for. A process will not run unless 'p_waiting' is 0 (initial value)
+indicating that it is not waiting for any other processes. Each time a process completes execution, any
+process whose waiting field contains the pid of the exiting process will be set to 0, and
+can be run by a call to schedule. Each time a process completes execution, the reg_eax of any waiting
+processes is set to the value in the reg_eax of the current process. This allows the exit status
+to progagate up to the next process to be run
+
+
+Response to Exercise 4:
+When sys wait(p) returns to process p it's state is changed from ZOMBIE to EMPTY. This allows fork to create
+a new process with that pid.
+
+Anything else you'd like us to know:
+
+
+
+Extra credit exercises:
