@@ -221,6 +221,9 @@ schedule(void)
     pid = 0;
     while(1) {
       maxPriority = 0xffffffff;
+      pid = 0;
+
+      // get max priority runnable process
       for (i=0; i<NPROCS; i++) {
         if (proc_array[i].p_priority < maxPriority) {
           if (proc_array[i].p_state == P_RUNNABLE) {
@@ -229,17 +232,24 @@ schedule(void)
         }
       }
 
-		  pid = (pid + 1) % NPROCS;
-			if (proc_array[pid].p_priority <= maxPriority) {
-        if (proc_array[pid].p_state == P_RUNNABLE) {
-					run(&proc_array[pid]);
+      for (pid=0; pid<NPROCS; pid++) {
+        if (proc_array[pid].p_priority <= maxPriority) {
+          if (proc_array[pid].p_state == P_RUNNABLE) {
+            run(&proc_array[pid]);
+          }
         }
       }
     }
   }
   // end exercise 4A
 
-	// If we get here, we are running an unknown scheduling algorithm.
+  // exercise 4B
+  else if (scheduling_algorithm == 3) {
+
+  }
+  // end exercise 4B
+
+  	// If we get here, we are running an unknown scheduling algorithm.
 	cursorpos = console_printf(cursorpos, 0x100, "\nUnknown scheduling algorithm %d\n", scheduling_algorithm);
 	while (1)
 		/* do nothing */;
