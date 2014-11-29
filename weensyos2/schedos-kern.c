@@ -73,6 +73,7 @@ start(void)
 	for (i = 0; i < NPROCS; i++) {
 		proc_array[i].p_pid = i;
 		proc_array[i].p_state = P_EMPTY;
+    proc_array[i].p_priority = NPROCS-1-i;
 	}
 
 	// Set up process descriptors (the proc_array[])
@@ -147,13 +148,11 @@ interrupt(registers_t *reg)
 		current->p_exit_status = reg->reg_eax;
 		schedule();
 
-	case INT_SYS_USER1:
-		// 'sys_user*' are provided for your convenience, in case you
-		// want to add a system call.
-		/* Your code here (if you want). */
-		run(current);
+  case INT_SYS_SET_PRIORITY:
+    current->p_priority = reg->reg_eax;
+    schedule();
 
-	case INT_SYS_USER2:
+  case INT_SYS_USER2:
 		/* Your code here (if you want). */
 		run(current);
 
@@ -189,8 +188,10 @@ void
 schedule(void)
 {
 	pid_t pid = current->p_pid;
+  pid_t i;
+  unsigned maxPriority;
 
-	if (scheduling_algorithm == 0){ // round robin
+	if (scheduling_algorithm == 2){ // round robin
 		while (1) {
 			pid = (pid + 1) % NPROCS;
 
@@ -216,8 +217,25 @@ schedule(void)
   // end exercise 2
 
   // exercise 4A
-  else if (scheduling_algorithm == 2) {
+  else if (scheduling_algorithm == 0) {
+    pid = 0;
+    while(1) {
+      maxPriority = 0xffffffff;
+      for (i=0; i<NPROCS; i++) {
+        if (proc_array[i].p_priority < maxPriority) {
+          if (proc_array[i].p_state == P_RUNNABLE) {
+            maxPriority = proc_array[i].p_priority;
+          }
+        }
+      }
 
+		  pid = (pid + 1) % NPROCS;
+			if (proc_array[pid].p_priority <= maxPriority) {
+        if (proc_array[pid].p_state == P_RUNNABLE) {
+					run(&proc_array[pid]);
+        }
+      }
+    }
   }
   // end exercise 4A
 
