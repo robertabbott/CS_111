@@ -1,5 +1,6 @@
 #include "schedos-kern.h"
 #include "x86.h"
+#include "x86sync.h"
 #include "lib.h"
 
 /*****************************************************************************
@@ -65,7 +66,7 @@ start(void)
 
 	// Set up hardware (schedos-x86.c)
 	segments_init();
-	interrupt_controller_init(0);
+	interrupt_controller_init(1);
 	console_clear();
 
 	// Initialize process descriptors as empty
@@ -75,7 +76,7 @@ start(void)
 		proc_array[i].p_state = P_EMPTY;
     proc_array[i].p_priority = NPROCS-1-i;
     proc_array[i].p_share = i;
-    proc_array[i].p_sched_count = i+1;
+    proc_array[i].p_sched_count = i;
 	}
 
 	// Set up process descriptors (the proc_array[])
@@ -152,11 +153,11 @@ interrupt(registers_t *reg)
 
   case INT_SYS_SET_PRIORITY:
     current->p_priority = reg->reg_eax;
-    schedule();
+    run(current);
 
   case INT_SYS_SET_SHARE:
     current->p_share = reg->reg_eax;
-	  schedule();
+	  run(current);
 
 	case INT_CLOCK:
 		// A clock interrupt occurred (so an application exhausted its

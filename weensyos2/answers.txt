@@ -15,7 +15,7 @@ The name of the scheduling algorithm is: round robin
 
 Response to Exercise 3:
 Average turnaround time for scheduling_algorithm 0:(1277+1278+1279+1280)/4 = 1278.5 ms
-Average turnaround time for scheduling_algorithm 1:(320+640+960+1280)/4 = 800 ms
+Average turnaround time for scheduling_algorithm 1: (320+640+960+1280)/4 = 800 ms
 
 Average wait time for scheduling_algorithm 0: (0+1+2+3)/4 = 1.5 ms
 Average wait time for scheduling_algorithm 1: (0+320+640+960)/4 = 480 ms
@@ -23,9 +23,12 @@ Average wait time for scheduling_algorithm 1: (0+320+640+960)/4 = 480 ms
 Exercise 4:
 
 Did you complete Exercise 4A, Exercise 4B, or both for extra credit?
-
+completed both
 
 Exercise 5:
+Process 4 is the first to be interrupted. The program prints 1234 successfully then
+prints 1231. This indicates that process 4 was interrupted before it was able to
+print its character.
 
 
 (Exercise 6 is a coding exercise)

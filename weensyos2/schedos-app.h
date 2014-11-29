@@ -34,7 +34,29 @@ sys_yield(void)
 		     : "cc", "memory");
 }
 
+static inline void
+sys_set_priority(int priority)
+{
+	// We call a system call by causing an interrupt with the 'int'
+	// instruction.  In weensyos, the type of system call is indicated
+	// by the interrupt number -- here, INT_SYS_YIELD.
+	asm volatile("int %0\n"
+		     : : "i" (INT_SYS_SET_PRIORITY),
+             "a" (priority)
+		     : "cc", "memory");
+}
 
+static inline void
+sys_set_share(int share)
+{
+	// We call a system call by causing an interrupt with the 'int'
+	// instruction.  In weensyos, the type of system call is indicated
+	// by the interrupt number -- here, INT_SYS_YIELD.
+	asm volatile("int %0\n"
+		     : : "i" (INT_SYS_SET_SHARE),
+		         "a" (share)
+		     : "cc", "memory");
+}
 /*****************************************************************************
  * sys_exit(status)
  *

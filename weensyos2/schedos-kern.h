@@ -13,7 +13,6 @@
 // Process state type
 typedef enum procstate {
 	P_EMPTY = 0,			// The process table entry is empty
-					// (i.e. this is not a process)
 	P_RUNNABLE,			// This process is runnable
 	P_BLOCKED,			// This process is blocked
 	P_ZOMBIE			// This process has exited (but note
@@ -36,7 +35,7 @@ typedef struct process {
 
 
 // Clock frequency: the clock interrupt, if any, happens HZ times a second
-#define HZ			100
+#define HZ			9000
 
 // The interrupt number corresponding to the first hardware interrupt
 #define INT_HARDWARE		32
