@@ -74,6 +74,8 @@ start(void)
 		proc_array[i].p_pid = i;
 		proc_array[i].p_state = P_EMPTY;
     proc_array[i].p_priority = NPROCS-1-i;
+    proc_array[i].p_share = i;
+    proc_array[i].p_sched_count = i+1;
 	}
 
 	// Set up process descriptors (the proc_array[])
@@ -152,9 +154,9 @@ interrupt(registers_t *reg)
     current->p_priority = reg->reg_eax;
     schedule();
 
-  case INT_SYS_USER2:
-		/* Your code here (if you want). */
-		run(current);
+  case INT_SYS_SET_SHARE:
+    current->p_share = reg->reg_eax;
+	  schedule();
 
 	case INT_CLOCK:
 		// A clock interrupt occurred (so an application exhausted its
@@ -191,7 +193,7 @@ schedule(void)
   pid_t i;
   unsigned maxPriority;
 
-	if (scheduling_algorithm == 2){ // round robin
+	if (scheduling_algorithm == 0){ // round robin
 		while (1) {
 			pid = (pid + 1) % NPROCS;
 
@@ -217,8 +219,7 @@ schedule(void)
   // end exercise 2
 
   // exercise 4A
-  else if (scheduling_algorithm == 0) {
-    pid = 0;
+  else if (scheduling_algorithm == 2) {
     while(1) {
       maxPriority = 0xffffffff;
       pid = 0;
@@ -245,7 +246,26 @@ schedule(void)
 
   // exercise 4B
   else if (scheduling_algorithm == 3) {
+    while(1) {
+      for (i=0; i<NPROCS; i++) {
+        if (proc_array[i].p_sched_count == proc_array[i].p_share
+            && proc_array[i].p_state == P_RUNNABLE) {
+          proc_array[i].p_sched_count -= 1;
+          run(&proc_array[i]);
+        }
+      }
+      for (i=0; i<NPROCS; i++) {
+        if (proc_array[i].p_sched_count != 0
+            && proc_array[i].p_state == P_RUNNABLE) {
+          proc_array[i].p_sched_count -= 1;
+          run(&proc_array[i]);
+        }
+      }
 
+      for (i=0; i<NPROCS; i++) {
+        proc_array[i].p_sched_count = proc_array[i].p_share;
+      }
+    }
   }
   // end exercise 4B
 
