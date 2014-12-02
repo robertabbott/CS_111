@@ -35,7 +35,8 @@ print its character.
 
 
 Anything else you'd like us to know:
-
+In ex6 rather than use atomic swap, the cursorpos is incremented in the kernel.
+Since the kernel cant be interrupted the operation is atomic
 
 
 Extra credit exercises:

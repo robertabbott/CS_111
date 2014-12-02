@@ -1,6 +1,7 @@
 #ifndef WEENSYOS_SCHEDOS_APP_H
 #define WEENSYOS_SCHEDOS_APP_H
 #include "schedos.h"
+#include "x86sync.h"
 
 /*****************************************************************************
  * schedos-app.h
@@ -37,10 +38,7 @@ sys_yield(void)
 static inline void
 sys_set_priority(int priority)
 {
-	// We call a system call by causing an interrupt with the 'int'
-	// instruction.  In weensyos, the type of system call is indicated
-	// by the interrupt number -- here, INT_SYS_YIELD.
-	asm volatile("int %0\n"
+  asm volatile("int %0\n"
 		     : : "i" (INT_SYS_SET_PRIORITY),
              "a" (priority)
 		     : "cc", "memory");
@@ -49,13 +47,35 @@ sys_set_priority(int priority)
 static inline void
 sys_set_share(int share)
 {
-	// We call a system call by causing an interrupt with the 'int'
-	// instruction.  In weensyos, the type of system call is indicated
-	// by the interrupt number -- here, INT_SYS_YIELD.
-	asm volatile("int %0\n"
+  asm volatile("int %0\n"
 		     : : "i" (INT_SYS_SET_SHARE),
 		         "a" (share)
 		     : "cc", "memory");
+}
+
+static inline void
+sys_print_char(int character)
+{
+	asm volatile("int %0\n"
+		     : : "i" (INT_SYS_PRINT_CHAR),
+		         "a" (character)
+		     : "cc", "memory");
+}
+
+static void
+sys_acquire_lock(uint32_t *lock)
+{
+  while (atomic_swap(lock, 1) != 0) {
+    sys_yield();
+    continue;
+  }
+
+}
+
+static void
+sys_release_lock(uint32_t *lock)
+{
+  atomic_swap(lock, 0);
 }
 /*****************************************************************************
  * sys_exit(status)

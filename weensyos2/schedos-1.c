@@ -1,6 +1,6 @@
 #include "schedos-app.h"
 #include "x86sync.h"
-
+#include "schedos.h"
 /*****************************************************************************
  * schedos-1
  *
@@ -18,14 +18,26 @@
 #define PRINTCHAR	('1' | 0x0C00)
 #endif
 
+//global_lock = (uint32_t *) 0xB8004;
+
+
 void
 start(void)
 {
 	int i;
+  sys_set_priority(10);	// set process priority
+	sys_set_share(7);		// set process share
+	sys_yield();
 
 	for (i = 0; i < RUNCOUNT; i++) {
-		// Write characters to the console, yielding after each one.
-		*cursorpos++ = PRINTCHAR;
+    // if value == 1 locked else use atomic_swap to set it and lock it
+    //sys_acquire_lock(&global_lock);
+
+    // sys_print_char is system call for ex6
+    sys_print_char((int) PRINTCHAR);
+		// *cursorpos++ = PRINTCHAR;
+
+    //sys_release_lock(&global_lock);
 		sys_yield();
 	}
 

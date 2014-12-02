@@ -2,6 +2,9 @@
 #include "x86.h"
 #include "x86sync.h"
 #include "lib.h"
+#include "schedos.h"
+
+
 
 /*****************************************************************************
  * schedos-kern
@@ -100,6 +103,7 @@ start(void)
 	// Initialize the cursor-position shared variable to point to the
 	// console's first character (the upper left).
 	cursorpos = (uint16_t *) 0xB8000;
+  //global_lock = (uint32_t *) 0xB8002;
 
 	// Initialize the scheduling algorithm.
 	scheduling_algorithm = 0;
@@ -158,6 +162,10 @@ interrupt(registers_t *reg)
   case INT_SYS_SET_SHARE:
     current->p_share = reg->reg_eax;
 	  run(current);
+
+  case INT_SYS_PRINT_CHAR:
+		*cursorpos++ = reg->reg_eax;
+		schedule();
 
 	case INT_CLOCK:
 		// A clock interrupt occurred (so an application exhausted its

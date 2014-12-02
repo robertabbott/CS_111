@@ -35,7 +35,7 @@ typedef struct process {
 
 
 // Clock frequency: the clock interrupt, if any, happens HZ times a second
-#define HZ			9000
+#define HZ			15000
 
 // The interrupt number corresponding to the first hardware interrupt
 #define INT_HARDWARE		32
