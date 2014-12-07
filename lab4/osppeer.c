@@ -476,7 +476,14 @@ task_t *start_download(task_t *tracker_task, const char *filename)
 		error("* Error while allocating task");
 		goto exit;
 	}
-	strcpy(t->filename, filename);
+  // buffer overflow risk if filename > FILENAMESIZ
+	// strcpy(t->filename, filename);
+  if (strlen(filename) > FILENAMESIZ-1) {
+    strncpy(t->filename, filename, FILENAMESIZ-1);
+    t->filename[FILENAMESIZ] = '\0';
+  } else {
+    strncpy(t->filename, filename, FILENAMESIZ);
+  }
 
 	// add peers
 	s1 = tracker_task->buf;
@@ -506,6 +513,8 @@ static void task_download(task_t *t, task_t *tracker_task)
 	assert((!t || t->type == TASK_DOWNLOAD)
 	       && tracker_task->type == TASK_TRACKER);
 
+  assert(strlen(t->filename) < FILENAMESIZ);
+
 	// Quit if no peers, and skip this peer
 	if (!t || !t->peer_list) {
 		error("* No peers are willing to serve '%s'\n",
@@ -533,7 +542,7 @@ static void task_download(task_t *t, task_t *tracker_task)
 	// at all.
 	for (i = 0; i < 50; i++) {
 		if (i == 0)
-			strcpy(t->disk_filename, t->filename);
+			strncpy(t->disk_filename, t->filename, FILENAMESIZ);
 		else
 			sprintf(t->disk_filename, "%s~%d~", t->filename, i);
 		t->disk_fd = open(t->disk_filename,
@@ -606,7 +615,6 @@ static task_t *task_listen(task_t *listen_task)
 	int fd;
 	task_t *t;
 	assert(listen_task->type == TASK_PEER_LISTEN);
-
 	fd = accept(listen_task->peer_fd,
 		    (struct sockaddr *) &peer_addr, &peer_addrlen);
 	if (fd == -1 && (errno == EINTR || errno == EAGAIN
@@ -643,11 +651,25 @@ static void task_upload(task_t *t)
 	}
 
 	assert(t->head == 0);
-	if (osp2p_snscanf(t->buf, t->tail, "GET %s OSP2P\n", t->filename) < 0) {
+
+
+	if (strlen(t->filename) > (FILENAMESIZ + strlen("GET OSP2P\n"))) {
+    perror("request too long\n");
+  }
+
+  if (osp2p_snscanf(t->buf, t->tail, "GET %s OSP2P\n", t->filename) < 0) {
 		error("* Odd request %.*s\n", t->tail, t->buf);
 		goto exit;
 	}
 	t->head = t->tail = 0;
+
+  // check that file is in our current directory
+  // im not actually sure if this is correct or enough
+  // to determine correct directory
+  if (strstr(t->filename, "/") != NULL) {
+    perror("invalid filename");
+  }
+
 
 	t->disk_fd = open(t->filename, O_RDONLY);
 	if (t->disk_fd == -1) {
