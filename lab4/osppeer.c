@@ -209,6 +209,12 @@ taskbufresult_t write_from_taskbuf(int fd, task_t *t)
 	else {
 		t->head += amt;
 		t->total_written += amt;
+
+    if (t->total_written > FILE_DOWNLOAD_LIMIT) {
+      task_free(t);
+		  return TBUF_ERROR;
+		}
+
 		return TBUF_OK;
 	}
 }
@@ -587,10 +593,10 @@ static void task_download(task_t *t, task_t *tracker_task)
 			break;
 
 		// check to limit the download file size
-		if (t->total_written > FILE_DOWNLOAD_LIMIT) {
-      task_free(t);
-		  return;
-		}
+		//if (t->total_written > FILE_DOWNLOAD_LIMIT) {
+    //  task_free(t);
+		//  return;
+		//}
 		ret = write_from_taskbuf(t->disk_fd, t);
 		if (ret == TBUF_ERROR) {
 			error("* Disk write error");
