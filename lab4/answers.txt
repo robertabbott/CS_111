@@ -1,5 +1,5 @@
 # Fill in your name, student ID, and email address in this file.
-# If you are working in a team, fill out the information for both team 
+# If you are working in a team, fill out the information for both team
 # members.
 
 # SUBMIT THE LAB ONLY ONCE (from only one partner). This file will be
@@ -13,26 +13,49 @@
 # information you'd like us to know, please add it at the end of the file.
 
 # Partner 1
-Name: 
-Student ID: 
-Email: 
+Name: Robert Abbott
+Student ID: 004432123
+Email: robertabbott@ucla.edu
 
 # Partner 2 (if you're working in a team)
-Name: 
-Student ID: 
-Email: 
+Name: Mohammed Junaid Ahmed
+Student ID: 104293008
+Email: mdjunaid.54@gmail.com
 
 # EXERCISE 1: What method you used to make your peer download and upload
 #    files in parallel?  (~1-3 sentences)
+Forked a new process for each task.
 
 # EXERCISE 2A: What conditions did you find and fix that would have
 #    triggered a buffer overrun bug?  (~1-3 sentences each)
+In start_download and start_upload filename and disk_filename have a filename
+copied to them using strcpy. If the size of the string copied is larger than
+FILENAMESIZ that would cause an error. To prevent this error strcpy is
+replaced with strncpy.
 
 # EXERCISE 2B: What other robustness problems did you fix?  (~1-3 sentences
 #    each)
+- Prevented downloads from outside the current directory
+
+- Prevented our client from downloading files larger than FILE_DOWNLOAD_LIMIT (4MB)
+  by checking t->total_written in write_from_taskbuf and exiting if it surpasses
+  the FILE_DOWNLOAD_LIMIT value.
+
+- Limited number of requests by a single peer to prevent someone DOSing us
 
 # EXERCISE 3: Describe the attacks you implemented for "evil mode".  Why
 #    are they attacks?  (~3-10 sentences each)
+- Overflowed the victim's filename buffer by sending a GET request with a filename
+  of length 3 * FILENAMESIZ in the task_download method (evil mode 1). This can
+  crash the victims system if it does not handle the filename properly
+
+- DOS'd the victim by repeatedly opening sockets until all the victims sockets are
+  busy. This is done in the task_download method as well (evil mode 2). This
+  prevents the victim from making real connections to send and receive files
+
+- In the task_upload method rather than ceasing writing the disk_fd is continually
+  reset to 0 so it keeps writing to the peer forever (evil mode 3). Eventually
+  this attack fills the victim's disk with garbage.
 
 # Extra credit problems
 #Extra credit problem: none
