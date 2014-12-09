@@ -35,7 +35,9 @@ replaced with strncpy.
 
 # EXERCISE 2B: What other robustness problems did you fix?  (~1-3 sentences
 #    each)
-- Prevented downloads from outside the current directory
+- Prevented downloads from outside the current directory. This was done by
+  prepending './' before the filename passed with the task. This ensures
+  that the file must be in the current directory.
 
 - Prevented our client from downloading files larger than FILE_DOWNLOAD_LIMIT (4MB)
   by checking t->total_written in write_from_taskbuf and exiting if it surpasses
