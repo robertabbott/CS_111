@@ -38,6 +38,9 @@ static int listen_port;
 #define TASKBUFSIZ	4096	// Size of task_t::buf
 #define FILENAMESIZ	256	// Size of task_t::filename
 #define FILE_DOWNLOAD_LIMIT 4194304 // max file dl size = 4 MB
+#define PEER_CONNECT_MAX 5
+
+char tmpdir[FILENAMESIZ] = "/tmp/tmpXXXXXX";
 
 typedef enum tasktype {		// Which type of connection is this?
 	TASK_TRACKER,		// => Tracker connection
@@ -642,16 +645,82 @@ static void task_download(task_t *t, task_t *tracker_task)
 	task_download(t, tracker_task);
 }
 
+int
+is_granted(char *filename, int *filefd)
+{
+  int fd;;
+  int count = 0;
+  int ret = 1;
+  struct flock fl;
+  char path[4096];
+
+  snprintf(path, 4096, "%s/%s", tmpdir, filename);
+  fd = open(path, O_RDWR | O_CREAT, 0666);
+  if (fd < 0) {
+    message("open %s failed %s\n", path, strerror(errno));
+    return 0;
+  }
+
+  *filefd = fd;
+
+  fl.l_whence = SEEK_SET; /* SEEK_SET, SEEK_CUR, SEEK_END */ 
+  fl.l_start  = 0;        /* Offset from l_whence         */ 
+  fl.l_len    = 0;  
+
+  fl.l_pid    = getpid(); /* our PID                      */ 
+  fl.l_type = F_WRLCK;     /* F_RDLCK, F_WRLCK, F_UNLCK  */ 
+  fcntl(fd, F_SETLKW, &fl);  /* F_GETLK, F_SETLK, F_SETLKW */ 
+  read(fd, &count, 4);
+  message("open %s, count = %d\n", filename, count);
+  if (count >= PEER_CONNECT_MAX) {
+    close(fd);
+    ret = 0;
+  } else {
+    count++;
+    lseek(fd, 0, SEEK_SET);
+    write(fd, &count, 4);
+  }
+  return ret;
+}
+
+int
+decrease_conn_count(int fd)
+{
+  int count = 0;
+  int ret = 1;
+  struct flock fl;
+
+  fl.l_whence = SEEK_SET; /* SEEK_SET, SEEK_CUR, SEEK_END */ 
+  fl.l_start  = 0;        /* Offset from l_whence         */ 
+  fl.l_len    = 0;  
+
+  lseek(fd, 0, SEEK_SET);
+  fl.l_pid    = getpid(); /* our PID                      */ 
+  fl.l_type = F_WRLCK;     /* F_RDLCK, F_WRLCK, F_UNLCK  */ 
+  fcntl(fd, F_SETLKW, &fl);  /* F_GETLK, F_SETLK, F_SETLKW */
+  {
+    read(fd, &count, 4);
+    count--;
+    lseek(fd, 0, SEEK_SET);
+    write(fd, &count, 4);
+  }
+  fl.l_type = F_UNLCK;  /* set to unlock same region */ 
+  fcntl(fd, F_SETLK, &fl);
+
+  close(fd);
+  return ret;
+}
 
 // task_listen(listen_task)
 //	Accepts a connection from some other peer.
 //	Returns a TASK_UPLOAD task for the new connection.
-static task_t *task_listen(task_t *listen_task)
+static task_t *task_listen(task_t *listen_task, int *filefd)
 {
 	struct sockaddr_in peer_addr;
 	socklen_t peer_addrlen = sizeof(peer_addr);
 	int fd;
 	task_t *t;
+ startover:
 	assert(listen_task->type == TASK_PEER_LISTEN);
 	fd = accept(listen_task->peer_fd,
 		    (struct sockaddr *) &peer_addr, &peer_addrlen);
@@ -663,6 +732,12 @@ static task_t *task_listen(task_t *listen_task)
 
 	message("* Got connection from %s:%d\n",
 		inet_ntoa(peer_addr.sin_addr), ntohs(peer_addr.sin_port));
+
+	if (!is_granted(inet_ntoa(peer_addr.sin_addr), filefd)) {
+	  message("ignoring %s\n", inet_ntoa(peer_addr.sin_addr));
+	  close(fd);
+	  goto startover;
+	}
 
 	t = task_new(TASK_UPLOAD);
 	t->peer_fd = fd;
@@ -762,7 +837,8 @@ int main(int argc, char *argv[])
 	char *s;
 	const char *myalias;
 	struct passwd *pwent;
-
+	mkdtemp(tmpdir);
+	message("tmpdir = %s\n", tmpdir);
 	// Default tracker is read.cs.ucla.edu
 	osp2p_sscanf("131.179.80.139:11111", "%I:%d",
 		     &tracker_addr, &tracker_port);
@@ -844,18 +920,22 @@ int main(int argc, char *argv[])
       }
     }
 
-
+	int fd;
 	// Then accept connections from other peers and upload files to them!
-	while ((t = task_listen(listen_task))) {
-    pid = fork();
-
-    if (pid == 0) {
-		  task_upload(t);
-      exit(0);
-    } else if (pid < 0) {
-      perror("fork failed\n");
-    }
-  }
+	while ((t = task_listen(listen_task, &fd))) {
+	  pid = fork();
+	  if (pid == 0) {
+	    int _fd = fd;
+	    task_upload(t);
+	    decrease_conn_count(_fd);
+	    close(_fd);
+	    exit(0);
+	  } else if (pid < 0) {
+	    perror("fork failed\n");
+	  }
+	  usleep(1000);
+	  close(fd);
+	}
 
 	return 0;
 }
