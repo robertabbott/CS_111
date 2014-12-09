@@ -751,6 +751,7 @@ static task_t *task_listen(task_t *listen_task, int *filefd)
 //	the requested file.
 static void task_upload(task_t *t)
 {
+        char filepath[4096];
 	assert(t->type == TASK_UPLOAD);
 	// First, read the request from the peer.
 	while (1) {
@@ -776,19 +777,10 @@ static void task_upload(task_t *t)
 	}
 	t->head = t->tail = 0;
 
-  // check that file is in our current directory
-  // im not actually sure if this is correct or enough
-  // to determine correct directory
-  /*
-  if (strstr(t->filename, "/") != NULL) {
-    perror("invalid filename");
-  }
-*/
-
-
-	t->disk_fd = open(t->filename, O_RDONLY);
+	snprintf(filepath, 4096, "./%s", t->filename);
+	t->disk_fd = open(filepath, O_RDONLY);
 	if (t->disk_fd == -1) {
-		error("* Cannot open file %s", t->filename);
+		error("* Cannot open file %s", filepath);
 		goto exit;
 	}
 
