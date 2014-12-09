@@ -41,7 +41,14 @@ replaced with strncpy.
   by checking t->total_written in write_from_taskbuf and exiting if it surpasses
   the FILE_DOWNLOAD_LIMIT value.
 
-- Limited number of requests by a single peer to prevent someone DOSing us
+- Limited number of requests by a single peer to prevent someone DOSing us.
+  We have set a limit of 5 connections per peer.
+  For each peer, we create a file to store the connection count. We use fcntl
+  locks to update the file. So, when a peer requests a connection we check the
+  number of already connected streams from that peer. If this count is greater
+  than the limit, we ignore the connection. Otherwise, we increment the value
+  and store it back in to the file. And, when the upload is complete we decrement
+  the count and delete the file when the count becomes zero.
 
 # EXERCISE 3: Describe the attacks you implemented for "evil mode".  Why
 #    are they attacks?  (~3-10 sentences each)
