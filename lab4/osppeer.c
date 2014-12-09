@@ -671,7 +671,7 @@ is_granted(char *filename, int *filefd)
   fl.l_type = F_WRLCK;     /* F_RDLCK, F_WRLCK, F_UNLCK  */ 
   fcntl(fd, F_SETLKW, &fl);  /* F_GETLK, F_SETLK, F_SETLKW */ 
   read(fd, &count, 4);
-  message("open %s, count = %d\n", filename, count);
+  //message("open %s, count = %d\n", filename, count);
   if (count >= PEER_CONNECT_MAX) {
     close(fd);
     ret = 0;
@@ -734,7 +734,7 @@ static task_t *task_listen(task_t *listen_task, int *filefd)
 		inet_ntoa(peer_addr.sin_addr), ntohs(peer_addr.sin_port));
 
 	if (!is_granted(inet_ntoa(peer_addr.sin_addr), filefd)) {
-	  message("ignoring %s\n", inet_ntoa(peer_addr.sin_addr));
+	  //message("ignoring %s\n", inet_ntoa(peer_addr.sin_addr));
 	  close(fd);
 	  goto startover;
 	}
@@ -838,7 +838,7 @@ int main(int argc, char *argv[])
 	const char *myalias;
 	struct passwd *pwent;
 	mkdtemp(tmpdir);
-	message("tmpdir = %s\n", tmpdir);
+	//message("tmpdir = %s\n", tmpdir);
 	// Default tracker is read.cs.ucla.edu
 	osp2p_sscanf("131.179.80.139:11111", "%I:%d",
 		     &tracker_addr, &tracker_port);
